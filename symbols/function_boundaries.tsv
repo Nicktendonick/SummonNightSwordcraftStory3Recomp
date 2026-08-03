@@ -1,0 +1,3 @@
+# Tab-separated: start	end	mode	name
+# Conservative seed only; regenerate from reviewed csm3/Ghidra evidence.
+0x08000000	0x08000003	arm	rom_header_start_vector

@@ -1,0 +1,11 @@
+[rom]
+sha1 = "3f5253fcf57e07ce52472bd29a61d16b98a12376"
+crc32 = "0x12AFAE5D"
+game_code = "B3CJ"
+maker_code = "D9"
+
+[save]
+type = "eeprom"
+size = "0x2000"
+
+[quirks]

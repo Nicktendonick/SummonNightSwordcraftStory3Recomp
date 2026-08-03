@@ -1,0 +1,195 @@
+[program]
+name = "Summon Night: Craft Sword Monogatari - Hajimari no Ishi (Japan)"
+id = "swordcraft3_jp"
+load_address = 0x08000000
+size = 0x02000000
+entry_pc = 0x08000000
+codegen_shards = 32
+
+[identity]
+sha1 = "3f5253fcf57e07ce52472bd29a61d16b98a12376"
+
+[[data_range]]
+start = 0x08000004
+end = 0x080000C0
+note = "GBA ROM header and Nintendo logo"
+
+[[extra_func]]
+addr = 0x08000000
+mode = "arm"
+name = "rom_header_start_vector"
+
+[[extra_func]]
+addr = 0x080000C0
+mode = "arm"
+name = "crt0_start"
+
+# The game copies four executable regions into IWRAM during startup. These
+# mappings are verified against csm3's linker layout and copy calls.
+[[code_copy]]
+runtime_start = 0x030025B8
+source_start = 0x080B6B70
+size = 0x00000380
+name = "sound_main_ram"
+note = "SoundMainRAM copied by m4aSoundInit"
+
+[[extra_func]]
+addr = 0x030025B8
+mode = "thumb"
+name = "ram_SoundMainRAM"
+
+[[code_copy]]
+runtime_start = 0x03003370
+source_start = 0x080000FC
+size = 0x00000100
+name = "intr_main_ram"
+note = "IntrMain copied by InitIntrHandlers"
+
+[[extra_func]]
+addr = 0x03003370
+mode = "arm"
+name = "ram_IntrMain"
+
+[[code_copy]]
+runtime_start = 0x03006410
+source_start = 0x08011F54
+size = 0x000000A4
+name = "palette_blend_toward_ram"
+note = "CpuSet 0x29 words in sub_0800F0xx"
+
+[[extra_func]]
+addr = 0x03006410
+mode = "thumb"
+name = "ram_sub_08011F54"
+
+[[code_copy]]
+runtime_start = 0x030064C0
+source_start = 0x08011FF8
+size = 0x000000A8
+name = "palette_blend_from_ram"
+note = "CpuSet 0x2A words in sub_0800F0xx"
+
+[[extra_func]]
+addr = 0x030064C0
+mode = "thumb"
+name = "ram_sub_08011FF8"
+
+# MP2K copies this 36-entry ROM template into gMPlayJumpTable and then patches
+# selected slots. The ROM table remains the authoritative seed set.
+[[jump_table]]
+addr = 0x080C05F4
+stride = 4
+count = 36
+format = "abs32"
+entries_mode = "auto"
+name = "gMPlayJumpTableTemplate"
+
+# Script callback table identified by csm3. Its 16 slots contain 13 Thumb
+# function pointers, including sub_080131DC and sub_08013220.
+[[jump_table]]
+addr = 0x08B716B4
+stride = 4
+count = 16
+format = "abs32"
+entries_mode = "auto"
+name = "gUnk_08B716B4"
+
+# The contiguous pointer block immediately before csm3's gUnk_080C08CC data
+# contains 12 small Thumb byte handlers used by the new-game script path.
+[[jump_table]]
+addr = 0x080C089C
+stride = 4
+count = 12
+format = "abs32"
+entries_mode = "auto"
+name = "script_byte_store_handlers"
+
+# These small MP2K command handlers are interruptible and produced observed
+# interior return PCs. Reviewed ranges are preferable to reactive one-PC seeds.
+[[resume_range]]
+start = 0x080B6FD4
+end = 0x080B6FE8
+mode = "thumb"
+note = "ply_tempo"
+
+[[resume_range]]
+start = 0x080B6FE8
+end = 0x080B6FFC
+mode = "thumb"
+note = "ply_keysh"
+
+[[resume_range]]
+start = 0x080B6FFC
+end = 0x080B702C
+mode = "thumb"
+note = "ply_voice"
+
+[[resume_range]]
+start = 0x080B702C
+end = 0x080B7040
+mode = "thumb"
+note = "ply_vol"
+
+[[resume_range]]
+start = 0x080B7040
+end = 0x080B7054
+mode = "thumb"
+note = "ply_pan"
+
+[[resume_range]]
+start = 0x080B7054
+end = 0x080B7068
+mode = "thumb"
+note = "ply_bend"
+
+[[resume_range]]
+start = 0x080B7068
+end = 0x080B707C
+mode = "thumb"
+note = "ply_bendr"
+
+[[resume_range]]
+start = 0x080B707C
+end = 0x080B7088
+mode = "thumb"
+note = "ply_lfodl"
+
+[[resume_range]]
+start = 0x080B7088
+end = 0x080B70A0
+mode = "thumb"
+note = "ply_modt"
+
+[[resume_range]]
+start = 0x03006410
+end = 0x030064B4
+mode = "thumb"
+note = "IWRAM palette blend routine"
+
+[[extra_func]]
+addr = 0x08001B40
+mode = "thumb"
+resume = true
+name = "sub_08001B20_resume_08001B40"
+note = "Observed asynchronous return inside sub_08001B20"
+
+[[extra_func]]
+addr = 0x080139B6
+mode = "thumb"
+resume = true
+name = "sub_080139B0_resume_080139B6"
+note = "Observed asynchronous return inside sub_080139B0"
+
+[[extra_func]]
+addr = 0x080B7B06
+mode = "thumb"
+resume = true
+name = "sub_080B7B04_resume_080B7B06"
+note = "Observed asynchronous return inside sub_080B7B04"
+
+[[extra_func]]
+addr = 0x080B7DA0
+mode = "thumb"
+resume = true
+name = "sub_080B7D9E_resume_080B7DA0"
+note = "Observed asynchronous return inside sub_080B7D9E"

@@ -1,0 +1,12 @@
+# gbarecomp-keyinput-v1
+# frame,keyinput_active_low
+# Skip the animated opening, choose New Game, then select the left/male hero.
+0,0x03FF
+1200,0x03F7
+1210,0x03FF
+2050,0x03F7
+2060,0x03FF
+2450,0x03FE
+2460,0x03FF
+3900,0x01FF
+3910,0x03FF

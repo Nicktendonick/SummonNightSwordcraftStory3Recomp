@@ -1,0 +1,46 @@
+# Copyrighted inputs and local saves
+roms/
+*.gba
+*.GBA
+*.sav
+*.srm
+*.eep
+
+# Generated ROM-derived code
+generated/*.c
+generated/*.cpp
+generated/*.h
+generated/*.json
+
+# Local reference checkouts and tool output
+third_party/
+build/
+build-*/
+.tooling/
+release-stage/
+validation/
+*.exe
+*.dll
+*.pdb
+*.log
+*.bmp
+*.png
+*.rgb
+recomp_cache/
+recomp_master_misses*.toml.frag
+recomp_coverage_*.json
+
+# Launcher state
+bios.cfg
+rom.cfg
+config.ini
+keybinds.ini
+
+# Editors and OS
+.vscode/
+.idea/
+.vs/
+Thumbs.db
+.DS_Store
+__pycache__/
+*.pyc
