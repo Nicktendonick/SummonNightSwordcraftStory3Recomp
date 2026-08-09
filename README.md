@@ -32,11 +32,31 @@ remain bring-up work.
 7. Configure and build this repository with CMake, Ninja, a MinGW compiler,
    and SDL2 available. Development builds stage the required MinGW/SDL2 DLLs
    and recomp-ui assets beside the executable, so the build directory is
-   directly launchable.
+   directly launchable. Generated game code remains optimized in Debug builds
+   to avoid the severe unoptimized guest-code slowdown; use a Release or
+   RelWithDebInfo build for performance validation.
 8. Run `tools/validate.ps1` to replay the strict-static new-game regression.
 
 The verified local inputs used during bring-up are documented in `baserom.md`.
 Neither input nor ROM/BIOS-derived generated code is committed.
+
+## Desktop controls and Assist Tools
+
+The game window is freely resizable. The native 3:2 picture remains
+aspect-correct, with letterboxing or pillarboxing when the window uses a
+different ratio. The title bar displays the measured FPS by default; it can
+also be toggled from the in-game Display section.
+
+Press Escape during play to open the recomp-ui runtime menu. Its **Assist
+Tools** section has a master enable switch, 10 save-state slots, Save and Load
+actions, a persistent fast-forward switch, and a one-second rewind action.
+Rewind keeps the most recent 10 seconds in memory and is cleared when a state
+file is loaded. Slot 10 is menu-only; the existing function-key shortcuts
+remain slots 1 through 9. While Assist Tools is enabled, hold Tab to
+fast-forward, use Shift+F1 through Shift+F9 to save, and F1 through F9 to load.
+
+Save states are convenience snapshots rather than replacements for normal
+in-game saves and are tied to the current ROM and snapshot format.
 
 ## Repository boundaries
 

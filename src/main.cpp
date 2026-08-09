@@ -40,6 +40,16 @@ int main(int argc, char** argv) {
     opts.launcher_game_config = "game.toml";
     opts.launcher_expose_widescreen = false;
     opts.launcher_expose_adaptive_view = false;
+    // Native game rendering stays 3:2, but the host window itself may be
+    // reshaped freely and will letterbox/pillarbox as needed.
+    opts.freely_resizable_window = true;
+    opts.show_fps_by_default = true;
+
+    opts.expose_assist_tools = true;
+    opts.assist_tools_enabled_by_default = true;
+    opts.save_state_slot_count = 10;
+    opts.rewind_history_seconds = 10;
+    opts.rewind_capture_interval_frames = 15;
 
 #if defined(SWORDCRAFT3_RECOMP_UI)
     std::vector<std::string> args(argv, argv + argc);

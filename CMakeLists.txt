@@ -56,6 +56,18 @@ target_compile_definitions(SummonNightSwordcraftStory3Recomp PRIVATE
     GBARECOMP_WINDOW_TITLE="Summon Night: Swordcraft Story 3"
     GBARECOMP_DEFAULT_GAME_CONFIG="game.toml")
 
+# Generated guest code is the dominant runtime cost. An unoptimized Debug
+# build fell well below real-time even though the runtime was functioning
+# correctly, so keep the game corpus optimized during developer builds while
+# leaving the reusable framework's own debugging policy untouched.
+if(MSVC)
+    target_compile_options(SummonNightSwordcraftStory3Recomp PRIVATE
+        $<$<CONFIG:Debug>:/O2>)
+else()
+    target_compile_options(SummonNightSwordcraftStory3Recomp PRIVATE
+        $<$<CONFIG:Debug>:-O2>)
+endif()
+
 option(SWORDCRAFT3_RECOMP_UI "Build the recomp-ui pre-boot launcher" ON)
 if(SWORDCRAFT3_RECOMP_UI)
     include("${RECOMP_UI_ROOT}/recomp_ui.cmake")
