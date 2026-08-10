@@ -2,7 +2,8 @@ param(
     [string]$BuildDir = "build-assist",
     [int]$PacingPresents = 60,
     [switch]$SkipPacing,
-    [switch]$SkipStateRoundTrip
+    [switch]$SkipStateRoundTrip,
+    [switch]$SkipCallDepthGuard
 )
 
 $ErrorActionPreference = "Stop"
@@ -134,7 +135,8 @@ function Start-ValidationRun(
     [bool]$holdFastForward,
     [string]$assistScript = "",
     [scriptblock]$interaction = $null,
-    [int]$timeoutSeconds = 180
+    [int]$timeoutSeconds = 180,
+    [int]$presentCallDepthLimit = 0
 ) {
     Set-AssistConfig $multiplier
     $stdoutPath = Join-Path $script:outputPath "$name.stdout.log"
@@ -173,6 +175,11 @@ function Start-ValidationRun(
     if ($assistScript) {
         $start.EnvironmentVariables["GBARECOMP_ASSIST_SCRIPT"] =
             $assistScript
+    }
+    if ($presentCallDepthLimit -gt 0) {
+        $start.EnvironmentVariables[
+            "GBARECOMP_PRESENT_IN_PLACE_CALL_DEPTH"] =
+                [string]$presentCallDepthLimit
     }
 
     $process = [Diagnostics.Process]::new()
@@ -249,6 +256,19 @@ try {
         $pacingResults | Export-Csv -LiteralPath `
             (Join-Path $outputPath "pacing-summary.csv") -NoTypeInformation
         $pacingResults | Format-Table -AutoSize
+    }
+
+    if (-not $SkipCallDepthGuard) {
+        $guardRun = Start-ValidationRun `
+            -name "present_call_depth_guard" -presents 120 `
+            -multiplier 4 -holdFastForward $false `
+            -assistScript "1:fast_on" -timeoutSeconds 60 `
+            -presentCallDepthLimit 1
+        if ($guardRun.Stderr -notmatch
+            "present-in-place call-depth unwind") {
+            throw "Present-in-place call-depth guard did not activate"
+        }
+        Write-Host "PASS: present-in-place call-depth guard unwound safely"
     }
 
     if (-not $SkipStateRoundTrip) {

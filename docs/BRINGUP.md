@@ -49,6 +49,11 @@ framework source checkout.
   strict-static walk/interact continuation reaches guest frame 16,151 with zero
   misses. It currently stops at partner selection because the generic walker
   does not make the game-specific shoulder-button choice.
+- A reported windowed first-cutscene crash resolved to the generated host
+  call-return tracker reaching its 1,024-entry limit while present-in-place kept
+  a long-lived guest script chain active. The reusable runtime now performs a
+  safe VBlank unwind at depth 512. A forced depth-1 regression completed 120
+  presentations and eight unwinds with zero dispatch misses.
 - That continuation exposed interrupt resumes inside `0x08003F9E..0x08004050`
   and `0x080060BC..0x08006106`; both reviewed ranges are now in the game
   metadata rather than the reusable runtime.

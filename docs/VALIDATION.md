@@ -21,6 +21,18 @@ built fresh rewind history, and rewound successfully. The snapshot also loaded
 in two fresh strict-static processes; both 120-frame continuations ended at
 guest frame 6,271 with zero dispatch misses and identical framebuffer hashes.
 
+## Windowed call-depth regression
+
+Windows Error Reporting identified the first-cutscene failure as an intentional
+abort in `runtime_call_push_return`: present-in-place windowed execution had
+grown the generated host call chain to its fixed 1,024-entry limit. The reusable
+runtime now unwinds and redispatches at a safe VBlank when depth reaches 512.
+
+A forced-threshold regression set the limit to 1 during a 120-presentation
+windowed boot. It exercised eight safe unwinds and exited normally with zero
+dispatch misses and zero interpreted instructions. The standard 4,400-frame
+strict-static new-game route also remained `FULLY_STATIC` after the change.
+
 ## Static coverage
 
 - Canonical new-game route: 4,400 frames, `FULLY_STATIC`.
