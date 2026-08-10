@@ -47,6 +47,7 @@ int main(int argc, char** argv) {
 
     opts.expose_assist_tools = true;
     opts.assist_tools_enabled_by_default = true;
+    opts.assist_fast_forward_multiplier_default = 4;
     opts.save_state_slot_count = 10;
     opts.rewind_history_seconds = 10;
     opts.rewind_capture_interval_frames = 15;

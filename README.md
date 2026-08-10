@@ -55,6 +55,9 @@ configuration page repeats its global Rewind and Fast-forward binding chips.
 Select a keyboard or controller chip and press the replacement key, button, or
 trigger. The defaults match the DKC2 project: `1`/left trigger for Rewind and
 `2`/right trigger for Fast-forward. **Reset Assist Controls** restores them.
+The Fast-forward speed slider ranges from 2x to 10x and defaults to 4x. It is
+available in both the pre-boot Assist Tools page and the in-game Assist Tools
+section; changes made in-game apply immediately for the current session.
 Rewind keeps the most recent 10 seconds in memory and is cleared when a state
 file is loaded. Slot 10 is menu-only; the existing function-key shortcuts
 remain slots 1 through 9. While Assist Tools is enabled, hold Tab to
