@@ -48,7 +48,10 @@ Neither input nor ROM/BIOS-derived generated code is committed.
 The game window is freely resizable. The native 3:2 picture remains
 aspect-correct, with letterboxing or pillarboxing when the window uses a
 different ratio. The title bar displays the measured FPS by default; it can
-also be toggled from the in-game Display section.
+also be toggled from the in-game Display section. Normal-speed play targets
+the GBA's native 59.7275 FPS, so a healthy counter reads about 59.7 rather
+than exactly 60. Renderer VSync is disabled by default so it cannot compete
+with that native frame clock.
 
 Press Escape during play to open the recomp-ui runtime menu. Its **Assist
 Tools** section has a master enable switch, 10 save-state slots, Save and Load

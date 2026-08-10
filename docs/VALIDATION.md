@@ -33,6 +33,27 @@ windowed boot. It exercised eight safe unwinds and exited normally with zero
 dispatch misses and zero interpreted instructions. The standard 4,400-frame
 strict-static new-game route also remained `FULLY_STATIC` after the change.
 
+## Native timing and audio
+
+Results recorded on 2026-08-10 from the warm slot-1 checkpoint over 600
+windowed presentations on a 165 Hz display:
+
+| Presentation mode | Measured FPS | Present block p50 / p95 | Audio stretch at 8 s | Underruns / overflow drops |
+|---|---:|---:|---:|---:|
+| Renderer VSync (previous default) | 48.79 | 3,938 / 10,938 us | 1,565 ms | 0 / 0 |
+| Native frame pacer (new default) | 59.76 | 250 / 1,745 us | 0 ms | 0 / 0 |
+
+The reusable host now leaves renderer VSync off unless
+`GBARECOMP_VSYNC=1` is explicitly set. `GBARECOMP_NO_VSYNC=1` remains a final
+override for existing diagnostics. The frame pacer remains the sole normal
+speed clock at the GBA's native 59.7275 Hz.
+
+After this change, the forced call-depth regression passed and the canonical
+4,400-frame new-game trace remained `FULLY_STATIC`. This checkpoint reproduces
+the systemic frame/audio pressure but does not reach the first battle; that
+scene remains a manual acceptance check until the deterministic trace is
+extended through partner selection.
+
 ## Static coverage
 
 - Canonical new-game route: 4,400 frames, `FULLY_STATIC`.

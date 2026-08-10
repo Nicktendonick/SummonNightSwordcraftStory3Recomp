@@ -54,6 +54,13 @@ framework source checkout.
   a long-lived guest script chain active. The reusable runtime now performs a
   safe VBlank unwind at depth 512. A forced depth-1 regression completed 120
   presentations and eight unwinds with zero dispatch misses.
+- A warm 600-presentation checkpoint on a 165 Hz desktop exposed renderer
+  VSync blocking in series with the native 59.7275 Hz frame pacer: throughput
+  fell to 48.79 FPS and the audio bridge accumulated 1,565 ms of stretching by
+  eight seconds. Making renderer VSync opt-in restored 59.76 FPS with zero
+  underruns, overflow drops, or stretch events. The exact first-battle scene
+  still needs a manual replay because the current deterministic trace stops
+  before partner selection.
 - That continuation exposed interrupt resumes inside `0x08003F9E..0x08004050`
   and `0x080060BC..0x08006106`; both reviewed ranges are now in the game
   metadata rather than the reusable runtime.
