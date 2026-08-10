@@ -50,15 +50,25 @@ also be toggled from the in-game Display section.
 Press Escape during play to open the recomp-ui runtime menu. Its **Assist
 Tools** section has a master enable switch, 10 save-state slots, Save and Load
 actions, a persistent fast-forward switch, and a one-second rewind action.
+The pre-boot launcher also has an **Assist Tools** page, and the Controller
+configuration page repeats its global Rewind and Fast-forward binding chips.
+Select a keyboard or controller chip and press the replacement key, button, or
+trigger. The defaults match the DKC2 project: `1`/left trigger for Rewind and
+`2`/right trigger for Fast-forward. **Reset Assist Controls** restores them.
 Rewind keeps the most recent 10 seconds in memory and is cleared when a state
 file is loaded. Slot 10 is menu-only; the existing function-key shortcuts
 remain slots 1 through 9. While Assist Tools is enabled, hold Tab to
-fast-forward, use Shift+F1 through Shift+F9 to save, and F1 through F9 to load.
+fast-forward as a legacy shortcut, use Shift+F1 through Shift+F9 to save, and
+F1 through F9 to load.
 
 Save states are convenience snapshots rather than replacements for normal
 in-game saves and are tied to the current ROM and snapshot format.
 
 ## Repository boundaries
+
+All durable project source, builds, configuration, notes, and test artifacts
+must remain under
+`Documents\Codex\Projects\SummonNightSwordcraftStory3Recomp`.
 
 - Game identity, configs, imported symbol metadata, and future game hooks live
   in this repository.
