@@ -14,11 +14,12 @@ The Windows debug executable builds and links with MinGW, SDL2, gbarecomp, and
 recomp-ui.
 
 A deterministic 4,400-frame trace starts a new game and selects the male
-protagonist. It passes gbarecomp's strict-static gate with zero dispatch misses
-and zero interpreted instructions. This proves static coverage for that bounded
-trace only; it does not yet make the project a playable port. Longer scripted
-traces, rendering/audio comparison, save persistence, and full-game coverage
-remain bring-up work.
+protagonist. A saved-state continuation now passes another 10,000 strict-static
+frames through partner selection (guest frame 16,151) with zero dispatch misses
+and zero interpreted instructions. This proves static coverage for those
+bounded traces only; it does not yet make the project a playable port. A
+game-specific route through partner selection, exploration, and combat remains
+bring-up work.
 
 ## Setup
 
@@ -36,6 +37,8 @@ remain bring-up work.
    to avoid the severe unoptimized guest-code slowdown; use a Release or
    RelWithDebInfo build for performance validation.
 8. Run `tools/validate.ps1` to replay the strict-static new-game regression.
+9. Run `tools/validate_assist_runtime.ps1 -BuildDir build-assist` to measure
+   fast-forward pacing and exercise isolated save-state/rewind actions.
 
 The verified local inputs used during bring-up are documented in `baserom.md`.
 Neither input nor ROM/BIOS-derived generated code is committed.
@@ -66,6 +69,12 @@ F1 through F9 to load.
 
 Save states are convenience snapshots rather than replacements for normal
 in-game saves and are tied to the current ROM and snapshot format.
+
+The automated startup pacing sample observed exact 1, 2, 4, and approximately
+10 guest frames per presentation for the corresponding modes. On the validation
+machine, the short startup sample measured 13.61 guest FPS normally and 147.74
+guest FPS at the 10x setting (about 2.47x real GBA speed). These are
+workload- and machine-specific measurements, not a whole-game benchmark.
 
 ## Repository boundaries
 

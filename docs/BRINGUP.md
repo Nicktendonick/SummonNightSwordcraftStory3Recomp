@@ -38,8 +38,24 @@ framework source checkout.
   and selects the male protagonist. It passes with
   `GBARECOMP_STRICT_STATIC=1`. Strict mode disables cache loading and aborts on
   the first interpreter bridge.
+- Assist validation confirms exact 2x and 4x guest-frame/presentation ratios
+  and an approximately 10x ratio at the 10x setting. The validation host reached
+  147.74 guest FPS (2.47x real GBA speed) in the short 10x startup sample.
+- A slot-1 snapshot saved at guest frame 6,151 restores in fresh strict-static
+  processes. Two independent 120-frame continuations produced the identical
+  framebuffer SHA-256
+  `6082CAD71A52457A0CD744C6C343B2A5014C54CC7718C39489A9C23663A2192A`.
+- The deterministic Assist route exercises save, load, and rewind. A longer
+  strict-static walk/interact continuation reaches guest frame 16,151 with zero
+  misses. It currently stops at partner selection because the generic walker
+  does not make the game-specific shoulder-button choice.
+- That continuation exposed interrupt resumes inside `0x08003F9E..0x08004050`
+  and `0x080060BC..0x08006106`; both reviewed ranges are now in the game
+  metadata rather than the reusable runtime.
 - Run `tools/validate.ps1` to reproduce that acceptance trace; add
   `-CaptureFrame` to write an ignored framebuffer snapshot under `validation/`.
+- Run `tools/validate_assist_runtime.ps1 -BuildDir build-assist` for the
+  isolated Assist campaign and timing CSVs under `validation/assist-runtime/`.
 - Treat this as a bounded startup baseline, not whole-game coverage.
 - Add deterministic input traces that reach the title screen, new game flow,
   combat, menus, saving/loading, and representative late-game scenes.
