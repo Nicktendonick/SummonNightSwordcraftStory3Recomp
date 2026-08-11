@@ -173,6 +173,18 @@ resume = true
 name = "sub_08001B20_resume_08001B40"
 note = "Observed asynchronous return inside sub_08001B20"
 
+[[resume_range]]
+start = 0x08003F9E
+end = 0x08004050
+mode = "thumb"
+note = "Interruptible script callback observed during extended walk validation"
+
+[[resume_range]]
+start = 0x080060BC
+end = 0x08006106
+mode = "thumb"
+note = "Interruptible callback observed during extended walk validation"
+
 [[extra_func]]
 addr = 0x080139B6
 mode = "thumb"

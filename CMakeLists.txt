@@ -34,6 +34,7 @@ file(GLOB SWORDCRAFT3_GENERATED_SOURCES CONFIGURE_DEPENDS
 
 add_executable(SummonNightSwordcraftStory3Recomp
     src/main.cpp
+    src/adaptive_widescreen.cpp
     ${SWORDCRAFT3_GENERATED_SOURCES})
 
 target_include_directories(SummonNightSwordcraftStory3Recomp PRIVATE
@@ -55,6 +56,18 @@ target_compile_definitions(SummonNightSwordcraftStory3Recomp PRIVATE
     GBARECOMP_DEFAULT_DEBUG_PORT=19853
     GBARECOMP_WINDOW_TITLE="Summon Night: Swordcraft Story 3"
     GBARECOMP_DEFAULT_GAME_CONFIG="game.toml")
+
+# Generated guest code is the dominant runtime cost. An unoptimized Debug
+# build fell well below real-time even though the runtime was functioning
+# correctly, so keep the game corpus optimized during developer builds while
+# leaving the reusable framework's own debugging policy untouched.
+if(MSVC)
+    target_compile_options(SummonNightSwordcraftStory3Recomp PRIVATE
+        $<$<CONFIG:Debug>:/O2>)
+else()
+    target_compile_options(SummonNightSwordcraftStory3Recomp PRIVATE
+        $<$<CONFIG:Debug>:-O2>)
+endif()
 
 option(SWORDCRAFT3_RECOMP_UI "Build the recomp-ui pre-boot launcher" ON)
 if(SWORDCRAFT3_RECOMP_UI)
@@ -80,4 +93,111 @@ if(MSVC)
 elseif(MINGW OR WIN32)
     target_link_options(SummonNightSwordcraftStory3Recomp PRIVATE
         -Wl,--stack,16777216)
+endif()
+
+# Optional private translation build. The user supplies the copyrighted BPS
+# and stock ROM locally; both the patched ROM and generated corpus stay below
+# the ignored build tree. This is a separate executable because the beta patch
+# changes ARM/Thumb instructions and therefore needs its own static corpus.
+set(SWORDCRAFT3_BETA_BPS "" CACHE FILEPATH
+    "Local Swordcraft Story 3 English beta BPS (empty disables beta target)")
+set(SWORDCRAFT3_STOCK_ROM
+    "${CMAKE_CURRENT_SOURCE_DIR}/roms/swordcraft3_jp.gba" CACHE FILEPATH
+    "Verified Japanese Swordcraft Story 3 ROM used for private code generation")
+
+if(SWORDCRAFT3_BETA_BPS)
+    if(NOT EXISTS "${SWORDCRAFT3_BETA_BPS}")
+        message(FATAL_ERROR "SWORDCRAFT3_BETA_BPS does not exist")
+    endif()
+    if(NOT EXISTS "${SWORDCRAFT3_STOCK_ROM}")
+        message(FATAL_ERROR "SWORDCRAFT3_STOCK_ROM does not exist")
+    endif()
+
+    add_executable(swordcraft3_rom_patch_tool EXCLUDE_FROM_ALL
+        recomp-ui/tools/rom_patch_tool.c
+        recomp-ui/src/common/ips_patch.c
+        recomp-ui/src/common/crc32.c
+        recomp-ui/src/common/sha1.c)
+    target_include_directories(swordcraft3_rom_patch_tool PRIVATE
+        recomp-ui/src/common)
+
+    set(SWORDCRAFT3_BETA_DIR "${CMAKE_BINARY_DIR}/generated-beta")
+    set(SWORDCRAFT3_BETA_ROM
+        "${CMAKE_BINARY_DIR}/rom-patch-cache/swordcraft3_beta.gba")
+    set(SWORDCRAFT3_BETA_CONFIG
+        "${CMAKE_BINARY_DIR}/swordcraft3_beta_codegen.toml")
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/symbols/swordcraft3_jp.toml"
+         SWORDCRAFT3_BETA_CONFIG_TEXT)
+    string(REPLACE
+        "sha1 = \"3f5253fcf57e07ce52472bd29a61d16b98a12376\""
+        "sha1 = \"bb2eebf98deb59bb6218442c2308bb5033ae2915\""
+        SWORDCRAFT3_BETA_CONFIG_TEXT "${SWORDCRAFT3_BETA_CONFIG_TEXT}")
+    file(WRITE "${SWORDCRAFT3_BETA_CONFIG}"
+         "${SWORDCRAFT3_BETA_CONFIG_TEXT}")
+
+    set(SWORDCRAFT3_BETA_SOURCES
+        "${SWORDCRAFT3_BETA_DIR}/dispatch_table.cpp")
+    foreach(SHARD RANGE 0 31)
+        if(SHARD LESS 10)
+            set(SHARD_PADDED "00${SHARD}")
+        else()
+            set(SHARD_PADDED "0${SHARD}")
+        endif()
+        list(APPEND SWORDCRAFT3_BETA_SOURCES
+            "${SWORDCRAFT3_BETA_DIR}/recompiled_${SHARD_PADDED}.cpp")
+    endforeach()
+    add_custom_command(
+        OUTPUT ${SWORDCRAFT3_BETA_SOURCES}
+               "${SWORDCRAFT3_BETA_DIR}/recompiled.h"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_BINARY_DIR}/rom-patch-cache"
+        COMMAND $<TARGET_FILE:swordcraft3_rom_patch_tool>
+                "${SWORDCRAFT3_STOCK_ROM}" "${SWORDCRAFT3_BETA_BPS}"
+                "${SWORDCRAFT3_BETA_ROM}"
+        COMMAND $<TARGET_FILE:gba_recompile>
+                --rom "${SWORDCRAFT3_BETA_ROM}"
+                --config "${SWORDCRAFT3_BETA_CONFIG}"
+                --symbols "${CMAKE_CURRENT_SOURCE_DIR}/symbols/imported_symbols.tsv"
+                --out "${SWORDCRAFT3_BETA_DIR}"
+        DEPENDS swordcraft3_rom_patch_tool gba_recompile
+                "${SWORDCRAFT3_STOCK_ROM}" "${SWORDCRAFT3_BETA_BPS}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/symbols/swordcraft3_jp.toml"
+                "${CMAKE_CURRENT_SOURCE_DIR}/symbols/imported_symbols.tsv"
+        VERBATIM)
+    add_custom_target(swordcraft3_beta_codegen
+        DEPENDS ${SWORDCRAFT3_BETA_SOURCES}
+                "${SWORDCRAFT3_BETA_DIR}/recompiled.h")
+
+    add_executable(SummonNightSwordcraftStory3RecompBeta
+        src/main.cpp src/adaptive_widescreen.cpp ${SWORDCRAFT3_BETA_SOURCES})
+    target_include_directories(SummonNightSwordcraftStory3RecompBeta PRIVATE
+        "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba"
+        "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug"
+        "${SWORDCRAFT3_BETA_DIR}" src)
+    target_link_libraries(SummonNightSwordcraftStory3RecompBeta PRIVATE
+        "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
+        gbarecomp_armv4t "-Wl,--end-group")
+    target_compile_definitions(SummonNightSwordcraftStory3RecompBeta PRIVATE
+        SWORDCRAFT3_BETA_BUILD=1 GBARECOMP_DEFAULT_DEBUG_PORT=19854
+        GBARECOMP_WINDOW_TITLE="Summon Night: Swordcraft Story 3 - English Beta"
+        GBARECOMP_DEFAULT_GAME_CONFIG="game.toml")
+    if(MSVC)
+        target_compile_options(SummonNightSwordcraftStory3RecompBeta PRIVATE
+            $<$<CONFIG:Debug>:/O2>)
+    else()
+        target_compile_options(SummonNightSwordcraftStory3RecompBeta PRIVATE
+            $<$<CONFIG:Debug>:-O2>)
+    endif()
+    if(SWORDCRAFT3_RECOMP_UI)
+        target_link_libraries(SummonNightSwordcraftStory3RecompBeta PRIVATE
+            swordcraft3_launcher_ui)
+    endif()
+    gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3RecompBeta)
+    if(MSVC)
+        target_link_options(SummonNightSwordcraftStory3RecompBeta PRIVATE
+            /STACK:16777216)
+    elseif(MINGW OR WIN32)
+        target_link_options(SummonNightSwordcraftStory3RecompBeta PRIVATE
+            -Wl,--stack,16777216)
+    endif()
 endif()
