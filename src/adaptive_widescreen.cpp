@@ -1,0 +1,221 @@
+#include "adaptive_widescreen.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+
+#include "gba_ppu.h"
+#include "runtime.h"
+
+namespace {
+
+constexpr std::uint32_t kNativeWidth = 240;
+constexpr std::uint16_t kFixed16x9Width = 284;
+constexpr std::size_t kDispcntOffset = 0x00;
+constexpr std::size_t kBgcntOffset = 0x08;
+
+unsigned s_mirrored_bg_mask = 0;
+unsigned s_wrap_ok_bg_mask = 0;
+unsigned s_extra_left = 0;
+
+std::uint16_t read16(const std::uint8_t* data, std::size_t size,
+                     std::size_t offset) {
+    if (!data || offset + 1 >= size) return 0;
+    return static_cast<std::uint16_t>(
+        data[offset] | (static_cast<std::uint16_t>(data[offset + 1]) << 8));
+}
+
+int swordcraft3_margin_tilemap(int bg, int, int, std::uint16_t*) {
+    // Mirrored layers are remapped into the native viewport by
+    // swordcraft3_margin_x before tilemap lookup and never reach this hook.
+    // A layer is accepted wrapped only when the reviewed scene family proved
+    // its tilemap is genuinely wider than the viewport and fully drawn
+    // (battle arenas author their whole 512px map up front). 256px ring
+    // buffers are never accepted wrapped -- the wrap is the opposite map seam
+    // plus stale streamer columns, the repeated/garbage margin art this
+    // policy exists to prevent. Everything else fails closed.
+    if (bg >= 0 && bg <= 3 &&
+        (s_wrap_ok_bg_mask & (1u << static_cast<unsigned>(bg))) != 0) {
+        return gba::kWsTilemapKeepWrapped;
+    }
+    return gba::kWsTilemapUnavailable;
+}
+
+int swordcraft3_margin_x(int bg, int output_x, int, int* out_hw_x) {
+    if (!out_hw_x || bg < 0 || bg > 3 ||
+        (s_mirrored_bg_mask & (1u << static_cast<unsigned>(bg))) == 0) {
+        return 0;
+    }
+
+    const int hw_x = output_x - static_cast<int>(s_extra_left);
+    if (hw_x < 0) {
+        *out_hw_x = -hw_x - 1;
+        return 1;
+    }
+    if (hw_x >= static_cast<int>(kNativeWidth)) {
+        *out_hw_x = static_cast<int>(kNativeWidth * 2u - 1u) - hw_x;
+        return 1;
+    }
+    return 0;
+}
+
+void use_native_margin_policy() {
+    s_mirrored_bg_mask = 0;
+    s_wrap_ok_bg_mask = 0;
+    s_extra_left = 0;
+    gba::g_ws_tilemap_provider = nullptr;
+    gba::g_ws_bg_x_provider = nullptr;
+    gba::g_ws_bg_x_provider_layers = 0;
+    gba::g_ws_authored_margin_layers = 0;
+    gba::g_ws_pillarbox = 0;
+    gba::g_ws_pillarbox_left = 0;
+    gba::g_ws_pillarbox_right = 0;
+    gba::g_ws_obj_native_clip = 0;
+}
+
+void initialize_extended_view(std::uint32_t, std::uint32_t) {
+    // Fail closed until the first per-frame register snapshot proves that the
+    // current scene has a reviewed margin continuation.
+    s_mirrored_bg_mask = 0;
+    s_wrap_ok_bg_mask = 0;
+    s_extra_left = 0;
+    gba::g_ws_tilemap_provider = swordcraft3_margin_tilemap;
+    gba::g_ws_bg_x_provider = swordcraft3_margin_x;
+    gba::g_ws_bg_x_provider_layers = 0;
+    gba::g_ws_authored_margin_layers = 0;
+    gba::g_ws_pillarbox = 1;
+    gba::g_ws_pillarbox_left = 0;
+    gba::g_ws_pillarbox_right = 0;
+    // Sprites the guest parked just off the native edge must never surface
+    // in the margins (harmless at native width; the wide path checks it).
+    gba::g_ws_obj_native_clip = 1;
+}
+
+void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
+    if (!frame || frame->view_width <= kNativeWidth) {
+        use_native_margin_policy();
+        return;
+    }
+
+    unsigned margin_layers = 0;
+    unsigned mirrored_layers = 0;
+    unsigned wrap_ok_layers = 0;
+    const std::uint16_t dispcnt = read16(
+        frame->io, frame->io_size, kDispcntOffset);
+    const unsigned bg_mode = dispcnt & 0x7u;
+    const bool forced_blank = (dispcnt & 0x80u) != 0;
+
+    // The game builds its field and battle scenes from single 256px screen
+    // blocks used as scrolling ring buffers. A wrapped ring can never fill a
+    // 262/284px view correctly: 240 visible columns leave at most 16 valid
+    // off-screen columns in VRAM, so kept-wrapped field margins show the
+    // opposite map seam plus stale streamer columns (observed as repeated or
+    // garbled art in free play). Until a map-data sidecar can supply true
+    // field tiles, reviewed field layers use reflected nearest-edge samples.
+    // Battle may additionally authorize its reviewed, fully drawn 512px BG1;
+    // unreviewed 512px layouts still fail closed. Affine/bitmap modes remain
+    // pillarboxed.
+    if (!forced_blank && bg_mode == 0) {
+        std::uint16_t bgcnt[4]{};
+        unsigned visible_layers = 0;
+        for (unsigned bg = 0; bg < 4; ++bg) {
+            if ((dispcnt & (0x0100u << bg)) == 0) continue;
+            visible_layers |= 1u << bg;
+            bgcnt[bg] = read16(
+                frame->io, frame->io_size, kBgcntOffset + bg * 2u);
+        }
+
+        auto screen_block = [&](unsigned bg) {
+            return static_cast<unsigned>((bgcnt[bg] >> 8) & 0x1Fu);
+        };
+        auto char_block = [&](unsigned bg) {
+            return static_cast<unsigned>((bgcnt[bg] >> 2) & 0x3u);
+        };
+
+        // Field/cutscene family: four consecutive screen blocks 5..8. BG0 is
+        // dialogue/status chrome and stays centered; BG1..BG3 form the
+        // scrolling environment and continue via reflection.
+        const bool field_scene = (visible_layers & 0xFu) == 0xFu &&
+            screen_block(0) == 5u && screen_block(1) == 6u &&
+            screen_block(2) == 7u && screen_block(3) == 8u;
+        if (field_scene) {
+            margin_layers |= 0xEu;
+            mirrored_layers |= 0xEu;
+        }
+
+        // Battle family: BG2 (char block 1, screen block 3) is the arena.
+        // Its ring buffer leaves the columns just outside the 240px viewport
+        // empty, so it reflects the nearest arena pixels the same way.
+        // BG0/BG1 carry the native-width HUD and remain centered.
+        const bool battle_scene = (visible_layers & (1u << 2)) != 0 &&
+            char_block(2) == 1u && screen_block(2) == 3u;
+        if (battle_scene) {
+            margin_layers |= 1u << 2;
+            mirrored_layers |= 1u << 2;
+            // The battle arena art itself rides BG1 on a 512px-wide map that
+            // the battle engine draws in full, so its off-viewport columns
+            // are real authored scenery rather than a stale ring seam.
+            // Continue it wrapped; the window registers gate it exactly as
+            // they gate the visible arena.
+            if ((visible_layers & (1u << 1)) != 0 &&
+                (bgcnt[1] & 0x4000u) != 0) {
+                margin_layers |= 1u << 1;
+                wrap_ok_layers |= 1u << 1;
+            }
+        }
+    }
+
+    // Scene-policy diagnostic: SWORDCRAFT3_WS_DEBUG=1 logs the register
+    // layout whenever it changes, so unreviewed families can be identified
+    // from a normal run instead of guessing at signatures.
+    if (std::getenv("SWORDCRAFT3_WS_DEBUG")) {
+        static std::uint32_t last_sig = 0xFFFFFFFFu;
+        std::uint32_t sig = dispcnt;
+        for (unsigned bg = 0; bg < 4; ++bg)
+            sig ^= static_cast<std::uint32_t>(read16(
+                frame->io, frame->io_size, kBgcntOffset + bg * 2u)) << (bg * 4);
+        if (sig != last_sig) {
+            last_sig = sig;
+            std::fprintf(stderr,
+                "[swordcraft3:ws] dispcnt=%04X bgcnt=%04X/%04X/%04X/%04X "
+                "win0h=%04X win0v=%04X winin=%04X winout=%04X "
+                "margins=%X mirrored=%X\n",
+                dispcnt,
+                read16(frame->io, frame->io_size, kBgcntOffset + 0),
+                read16(frame->io, frame->io_size, kBgcntOffset + 2),
+                read16(frame->io, frame->io_size, kBgcntOffset + 4),
+                read16(frame->io, frame->io_size, kBgcntOffset + 6),
+                read16(frame->io, frame->io_size, 0x40),
+                read16(frame->io, frame->io_size, 0x44),
+                read16(frame->io, frame->io_size, 0x48),
+                read16(frame->io, frame->io_size, 0x4A),
+                margin_layers, mirrored_layers);
+        }
+    }
+
+    s_mirrored_bg_mask = mirrored_layers;
+    s_wrap_ok_bg_mask = wrap_ok_layers;
+    s_extra_left = frame->extra_left;
+    gba::g_ws_tilemap_provider = swordcraft3_margin_tilemap;
+    gba::g_ws_bg_x_provider = swordcraft3_margin_x;
+    gba::g_ws_bg_x_provider_layers = mirrored_layers;
+    gba::g_ws_authored_margin_layers = margin_layers ? 1 : 0;
+    gba::g_ws_pillarbox = margin_layers ? 0 : 1;
+    gba::g_ws_pillarbox_left = 0;
+    gba::g_ws_pillarbox_right = 0;
+    gba::g_ws_obj_native_clip = 1;
+}
+
+}  // namespace
+
+void configure_swordcraft3_adaptive_widescreen(gbarecomp::RunOptions& opts) {
+    opts.max_view_width = kFixed16x9Width;
+    opts.max_resize_view_width = kFixed16x9Width;
+    opts.resize_driven_view = true;
+    opts.widescreen_view_width = kFixed16x9Width;
+    opts.launcher_expose_widescreen = true;
+    opts.launcher_expose_adaptive_view = true;
+    opts.extended_view_init = initialize_extended_view;
+    opts.extended_view_frame = update_extended_view;
+}

@@ -5,14 +5,19 @@ roms/
 *.sav
 *.srm
 *.eep
+*.ips
+*.ips32
+*.bps
 
 # Generated ROM-derived code
 generated/*.c
 generated/*.cpp
 generated/*.h
+generated-beta/
 generated/*.json
 
 # Local reference checkouts and tool output
+references/
 third_party/
 build/
 build-*/
