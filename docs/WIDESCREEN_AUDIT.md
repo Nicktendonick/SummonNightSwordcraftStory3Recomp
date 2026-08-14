@@ -13,7 +13,8 @@ The DKC2 audit work established several rules that apply here:
 1. Compare aligned Native and Wide runs. Every native-center pixel must remain
    identical; a non-black margin is not sufficient evidence.
 2. Record the selected source/policy, not just the final image. Swordcraft logs
-   whether each sampled frame used field reflection, battle reflection, or
+   whether each sampled frame used field true-map data, field reflection,
+   battle reflection, or
    fail-closed pillarboxing, plus BG registers and scroll.
    The record also retains the completed-frame boundary where the policy was
    observed; `frame` is the following PNG frame to which that policy applies.
@@ -105,13 +106,16 @@ Current detector classes are:
 `unclassified_scene_pillarboxed` is a safe observation, kept separately so
 future coverage work can prioritize common unsupported scene signatures.
 
-## Remaining oracle gap
+## True-map source and remaining oracle gap
 
-The current field policy deliberately reflects nearest-edge scenery because
-the live 256-pixel ring cannot provide a whole 284-pixel world view. The audit
-can prove center preservation and detect several temporal/presentation defects,
-but it cannot prove true field continuation. That requires the planned csm3
-map-data sidecar: resolve the decompressed map-index source, identify a stable
-world coordinate for each margin cell, and compare the same tile identity when
-it later enters the native view. Until then, reflected field margins remain a
-safe presentation fallback rather than authentic expanded map geometry.
+Reviewed field scenes now resolve BG1..BG3 margin entries from the game's full
+source tilemaps retained in its IWRAM background descriptors. This bypasses the
+256-pixel VRAM streaming rings and supplies the same neighboring tile identity
+that later scrolls into the native viewport. A layer whose descriptor or source
+map cannot be validated still falls back to the reviewed reflected-edge policy;
+unclassified scenes remain pillarboxed.
+
+The audit can prove center preservation and detect several temporal or
+presentation defects, but it still cannot infer artistic intent for every map,
+cutscene overlay, battle effect, or sprite. New routes and isolated layer
+captures remain required as those scene families are encountered.

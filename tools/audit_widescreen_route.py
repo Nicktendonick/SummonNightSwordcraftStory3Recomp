@@ -35,7 +35,9 @@ LAYER_MASKS = {
 # `battle_authored` is retained for re-analysis of preserved captures made
 # before the route audit disproved the authored-BG1 assumption and renamed the
 # live policy to `battle_reflect`.
-AUTHORED_POLICIES = {"field_reflect", "battle_reflect", "battle_authored"}
+AUTHORED_POLICIES = {
+    "field_true_map", "field_reflect", "battle_reflect", "battle_authored"
+}
 
 
 def parse_args() -> argparse.Namespace:

@@ -37,6 +37,7 @@ file(GLOB SWORDCRAFT3_GENERATED_SOURCES CONFIGURE_DEPENDS
 add_executable(SummonNightSwordcraftStory3Recomp
     src/main.cpp
     src/adaptive_widescreen.cpp
+    src/swordcraft3_true_map.cpp
     ${SWORDCRAFT3_GENERATED_SOURCES})
 
 target_include_directories(SummonNightSwordcraftStory3Recomp PRIVATE
@@ -181,7 +182,8 @@ if(SWORDCRAFT3_BETA_BPS)
                 "${SWORDCRAFT3_BETA_DIR}/recompiled.h")
 
     add_executable(SummonNightSwordcraftStory3RecompBeta
-        src/main.cpp src/adaptive_widescreen.cpp ${SWORDCRAFT3_BETA_SOURCES})
+        src/main.cpp src/adaptive_widescreen.cpp src/swordcraft3_true_map.cpp
+        ${SWORDCRAFT3_BETA_SOURCES})
     target_include_directories(SummonNightSwordcraftStory3RecompBeta PRIVATE
         "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba"
         "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug"

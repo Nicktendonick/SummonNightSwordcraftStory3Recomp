@@ -71,9 +71,10 @@ the canonical `new_game_select_male.trace` replay:
 An unrestricted WIP probe repeated/corrupted title and menu columns in the
 added margins. The game policy now authorizes reviewed Mode 0 field/cutscene
 and battle signatures in addition to visible 512-pixel tilemaps. Field scenery
-continues from the live scrolling layers. The battle arena uses a game-specific
-reflected-edge continuation because its 256-pixel ring leaves adjacent columns
-empty; its HUD stays centered. Unsupported layouts fail closed to clean margin
+continues from the game's complete source tilemaps retained behind the live
+scrolling rings. The battle arena uses a game-specific reflected-edge
+continuation because its 256-pixel ring leaves adjacent columns empty; its HUD
+stays centered. Unsupported layouts fail closed to clean margin
 pillarboxing. The launcher exposes Native, fixed 16:9, and window-driven
 Adaptive modes, with Adaptive capped at 16:9.
 
@@ -106,14 +107,16 @@ wrap. Secondary contributors: the blanket acceptance of any visible 512px
 Mode 0 layer exposed undrawn VRAM in menus/titles, and sprites parked just
 off-screen (signed 9-bit OAM X) surfaced in the margins.
 
-Revised policy: reviewed field scenes now use a reflected nearest-edge
+Historical revision: reviewed field scenes initially used a reflected nearest-edge
 continuation; the 512px blanket rule is removed (unreviewed layouts fail
 closed to pillarboxing); and the game opts into a new reusable
 `g_ws_obj_native_clip` renderer flag in `gbarecomp` that clips OBJ pixels to
 the native viewport. `ppu_smoke_tests` passes with a new opt-in/inert
 regression test for the clip. True field continuation remains future work via
 a map-data sidecar (see `gbarecomp/src/debug/ws_sidecar.cpp` for the
-reference pattern and the csm3 notes below). The widened-mode margin captures
+reference pattern and the csm3 notes below). This limitation was subsequently
+removed for validated field descriptors by the true-map revision below. The
+widened-mode margin captures
 above predate this revision and must be re-taken; margin checks should also
 compare against ground truth derived from map data rather than asserting
 non-black pixels.
@@ -221,6 +224,32 @@ instructions), so the comparison is aligned, but it is not eligible for
 release acceptance until the dynamic IWRAM/static coverage boundary closes.
 The ignored authoritative report is
 `validation/adaptive-widescreen/route-audit-beta-field-battle-fixed-coarse`.
+
+### True-map field continuation and transition guard (2026-08-13)
+
+The game keeps a complete source tilemap pointer, logical scroll coordinates,
+dimensions, palette bank, and tile-base bias in four IWRAM BG descriptors at
+guest address `0x03002A20` (stride `0x34`). The game-specific adapter now reads
+those descriptors and resolves BG1..BG3 margin tiles from the complete map.
+This bypasses the 32x32 hardware streaming ring, so widened field margins show
+authentic adjacent map geometry instead of reflection or wrapped stale tiles.
+The reusable runtime change is limited to read-only guest-memory exposure and
+a game-owned final-frame presentation hook; all descriptor knowledge remains in
+this repository.
+
+An English-beta field replay over frames 10,060..11,060 selected
+`field_true_map` for all 51 sampled frames. Native/Wide center comparison had no
+mismatch or capture-integrity finding, and the post-guard Wide PNG hashes were
+identical to the earlier good true-map run. The diagnostic run is still
+`NOT_STATIC` because of the previously documented beta IWRAM coverage gap.
+
+Owner testing also exposed a full-screen fire transition whose native center
+was black while prior field scenery leaked through at the widened sides. The
+transition is not present in the recorded route. Its screenshot measured 94.5%
+near-black inside the authentic 240x160 viewport. Swordcraft's game-owned final
+frame hook now extends black into the margins only when at least 90% of that
+authentic center is near-black. This preserves normal field/dialogue frames and
+requires a direct owner re-test of the fire effect for final visual acceptance.
 
 ## English beta BPS compatibility
 
