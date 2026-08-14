@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(SummonNightSwordcraftStory3Recomp C CXX)
 
+include(CTest)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -87,6 +89,16 @@ if(SWORDCRAFT3_RECOMP_UI)
 endif()
 
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
+
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME swordcraft3_widescreen_route_audit_unit
+            COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+                -p "test_audit_widescreen_route.py" -v)
+    endif()
+endif()
 
 if(MSVC)
     target_link_options(SummonNightSwordcraftStory3Recomp PRIVATE /STACK:16777216)

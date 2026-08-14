@@ -19,6 +19,23 @@ unsigned s_mirrored_bg_mask = 0;
 unsigned s_wrap_ok_bg_mask = 0;
 unsigned s_extra_left = 0;
 
+std::uint64_t audit_env_u64(const char* name, std::uint64_t fallback) {
+    const char* value = std::getenv(name);
+    if (!value || !value[0]) return fallback;
+    char* end = nullptr;
+    const unsigned long long parsed = std::strtoull(value, &end, 0);
+    return end != value && *end == '\0' ? parsed : fallback;
+}
+
+bool should_emit_audit_frame(std::uint64_t frame) {
+    const char* enabled = std::getenv("SWORDCRAFT3_WS_AUDIT");
+    if (!enabled || !enabled[0] || enabled[0] == '0') return false;
+    const std::uint64_t start = audit_env_u64("SWORDCRAFT3_WS_AUDIT_START", 1);
+    const std::uint64_t step =
+        audit_env_u64("SWORDCRAFT3_WS_AUDIT_STEP", 1);
+    return frame >= start && (frame - start) % (step ? step : 1) == 0;
+}
+
 std::uint16_t read16(const std::uint8_t* data, std::size_t size,
                      std::size_t offset) {
     if (!data || offset + 1 >= size) return 0;
@@ -101,6 +118,8 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     unsigned margin_layers = 0;
     unsigned mirrored_layers = 0;
     unsigned wrap_ok_layers = 0;
+    bool field_scene = false;
+    bool battle_scene = false;
     const std::uint16_t dispcnt = read16(
         frame->io, frame->io_size, kDispcntOffset);
     const unsigned bg_mode = dispcnt & 0x7u;
@@ -136,7 +155,7 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
         // Field/cutscene family: four consecutive screen blocks 5..8. BG0 is
         // dialogue/status chrome and stays centered; BG1..BG3 form the
         // scrolling environment and continue via reflection.
-        const bool field_scene = (visible_layers & 0xFu) == 0xFu &&
+        field_scene = (visible_layers & 0xFu) == 0xFu &&
             screen_block(0) == 5u && screen_block(1) == 6u &&
             screen_block(2) == 7u && screen_block(3) == 8u;
         if (field_scene) {
@@ -148,7 +167,7 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
         // Its ring buffer leaves the columns just outside the 240px viewport
         // empty, so it reflects the nearest arena pixels the same way.
         // BG0/BG1 carry the native-width HUD and remain centered.
-        const bool battle_scene = (visible_layers & (1u << 2)) != 0 &&
+        battle_scene = (visible_layers & (1u << 2)) != 0 &&
             char_block(2) == 1u && screen_block(2) == 3u;
         if (battle_scene) {
             margin_layers |= 1u << 2;
@@ -205,6 +224,48 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     gba::g_ws_pillarbox_left = 0;
     gba::g_ws_pillarbox_right = 0;
     gba::g_ws_obj_native_clip = 1;
+
+    if (should_emit_audit_frame(frame->frame_count)) {
+        std::uint16_t bgcnt[4]{};
+        std::uint16_t hofs[4]{};
+        std::uint16_t vofs[4]{};
+        unsigned visible_layers = 0;
+        for (unsigned bg = 0; bg < 4; ++bg) {
+            bgcnt[bg] = read16(
+                frame->io, frame->io_size, kBgcntOffset + bg * 2u);
+            hofs[bg] = read16(
+                frame->io, frame->io_size, 0x10u + bg * 4u) & 0x01FFu;
+            vofs[bg] = read16(
+                frame->io, frame->io_size, 0x12u + bg * 4u) & 0x01FFu;
+            if ((dispcnt & (0x0100u << bg)) != 0)
+                visible_layers |= 1u << bg;
+        }
+        const char* policy = forced_blank ? "forced_blank" :
+            bg_mode != 0 ? "unsupported_mode" :
+            battle_scene ? "battle_authored" :
+            field_scene ? "field_reflect" : "pillarbox";
+        std::fprintf(stderr,
+            "swordcraft3_widescreen_frame={\"frame\":%llu,"
+            "\"view_width\":%u,\"extra_left\":%u,\"extra_right\":%u,"
+            "\"policy\":\"%s\",\"dispcnt\":%u,\"bg_mode\":%u,"
+            "\"forced_blank\":%s,\"visible_layers\":%u,"
+            "\"margin_layers\":%u,\"mirrored_layers\":%u,"
+            "\"wrapped_layers\":%u,\"pillarbox\":%s,"
+            "\"obj_native_clip\":true,"
+            "\"bgcnt\":[%u,%u,%u,%u],\"hofs\":[%u,%u,%u,%u],"
+            "\"vofs\":[%u,%u,%u,%u],"
+            "\"winin\":%u,\"winout\":%u}\n",
+            static_cast<unsigned long long>(frame->frame_count),
+            frame->view_width, frame->extra_left, frame->extra_right,
+            policy, dispcnt, bg_mode, forced_blank ? "true" : "false",
+            visible_layers, margin_layers, mirrored_layers, wrap_ok_layers,
+            margin_layers ? "false" : "true",
+            bgcnt[0], bgcnt[1], bgcnt[2], bgcnt[3],
+            hofs[0], hofs[1], hofs[2], hofs[3],
+            vofs[0], vofs[1], vofs[2], vofs[3],
+            read16(frame->io, frame->io_size, 0x48),
+            read16(frame->io, frame->io_size, 0x4A));
+    }
 }
 
 }  // namespace

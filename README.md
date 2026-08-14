@@ -106,6 +106,14 @@ captures now also cover a field dialogue and the first battle at Native,
 Adaptive, and 16:9. Broader exploration, transitions, later battles, and display
 effects still need review, so the launcher marks this feature **Experimental**.
 
+The repository now includes a deterministic route-scale auditor rather than
+relying only on hand-picked screenshots. It replays the same input in Native
+and Wide modes, verifies the entire 240x160 center pixel-for-pixel, records the
+scene policy selected on every sampled frame, and ranks persistent seams,
+pillarbox leaks, blank/frozen authored margins, and optional OBJ-isolation
+leaks. Raw captures remain ignored and can be reanalyzed without replaying the
+game. See [docs/WIDESCREEN_AUDIT.md](docs/WIDESCREEN_AUDIT.md).
+
 ## ROM patches and translations
 
 Open **Mods** in the pre-boot launcher to select and enable an IPS, IPS32, or

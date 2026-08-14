@@ -1,6 +1,6 @@
 # Developer handoff
 
-Prepared on 2026-08-11 for a new developer reviewing the Summon Night:
+Prepared on 2026-08-13 for a new developer reviewing the Summon Night:
 Swordcraft Story 3 static-recompilation project.
 
 ## Read this first
@@ -53,9 +53,16 @@ work in `recomp-ui`.
   dialogue chrome stay centered, margin sprites are clipped, and unreviewed
   layouts pillarbox. See the margin-policy revision in
   [VALIDATION.md](VALIDATION.md).
+- A deterministic Native/Wide route auditor with exact center comparison,
+  per-frame game-policy telemetry, temporal seam/freeze ranking, reusable
+  BG/OBJ isolation, strict coverage checks, raw-evidence reuse, and an HTML
+  report. Its current canonical route validates only fail-closed pillarboxing;
+  overworld and battle route coverage remain the next acceptance milestone.
 
-See [README.md](../README.md), [BRINGUP.md](BRINGUP.md), and
-[VALIDATION.md](VALIDATION.md) for the detailed history and measurements.
+See [README.md](../README.md), [BRINGUP.md](BRINGUP.md),
+[VALIDATION.md](VALIDATION.md), and
+[WIDESCREEN_AUDIT.md](WIDESCREEN_AUDIT.md) for the detailed history,
+measurements, and audit workflow.
 
 ## Private local inputs
 

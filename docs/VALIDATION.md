@@ -153,6 +153,34 @@ family) assemble 32-byte tile strips from a decompressed pool indexed by
 12-bit map entries — that map-index array is the true-world source a field
 sidecar should read.
 
+### Deterministic route audit (2026-08-13)
+
+The new route-scale auditor sampled frames 1,200 through 4,400 every 12 guest
+frames in five aligned strict-static runs: Native composite, Wide composite,
+Wide BG1, Wide BG2, and Wide OBJ. It retained 1,335 raw images. Every run was
+`FULLY_STATIC`, with zero dispatch misses and zero interpreted instructions.
+The derived report recorded zero capture-integrity errors, zero native-center
+mismatches, and zero visual-detector findings.
+
+All 267 Wide composite samples selected `pillarbox`. Five distinct scene
+signatures were retained as safe fail-closed observations at frames 1,200,
+1,272, 2,052, 2,592, and 3,912. This is useful evidence that unsupported
+title/menu/cutscene layouts preserve the native image, but it is not authored
+widescreen coverage. A new deterministic route through free overworld movement
+and an active battle is the next required audit; the English-beta save-state
+snapshots remain isolated evidence rather than a temporal route.
+
+An earlier repeat was rejected because a connected Xbox controller triggered
+rewind during only the Native run, leaving 38 missing samples. The reusable
+runtime now supports exclusive input replay, and the audit also disables SDL's
+controller backends. The accepted repeat opened no controller and contained no
+rewind/save-state events. Raw evidence and the HTML report remain in the
+ignored `validation/adaptive-widescreen/route-audit-new-game-03` directory.
+
+See [WIDESCREEN_AUDIT.md](WIDESCREEN_AUDIT.md) for detector definitions,
+limitations, the one-command wrapper, and the coarse-to-frame-by-frame review
+workflow.
+
 ## English beta BPS compatibility
 
 The supplied beta patch was applied with the repository's reusable BPS engine.
