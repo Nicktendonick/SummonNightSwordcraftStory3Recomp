@@ -32,7 +32,10 @@ LAYER_MASKS = {
     "bg3": 0x08,
     "obj": 0x10,
 }
-AUTHORED_POLICIES = {"field_reflect", "battle_authored"}
+# `battle_authored` is retained for re-analysis of preserved captures made
+# before the route audit disproved the authored-BG1 assumption and renamed the
+# live policy to `battle_reflect`.
+AUTHORED_POLICIES = {"field_reflect", "battle_reflect", "battle_authored"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -171,6 +174,23 @@ def nonbackdrop_pixels(pixels: bytes) -> tuple[int, bytes]:
                      for offset in range(0, len(pixels), 3))
     backdrop = colors.most_common(1)[0][0]
     return sum(count for color, count in colors.items() if color != backdrop), backdrop
+
+
+def authored_black_backdrop(pixels: bytes, width: int,
+                             left: int, right: int) -> bool:
+    if left <= 0 or right <= 0:
+        return False
+    left_pixels = crop_rgb(pixels, width, 0, left)
+    right_pixels = crop_rgb(pixels, width, width - right, width)
+    if nonblack_pixels(left_pixels) or nonblack_pixels(right_pixels):
+        return False
+    center = crop_rgb(pixels, width, left, left + NATIVE_WIDTH)
+    center_nonblack_ratio = nonblack_pixels(center) / (NATIVE_WIDTH * HEIGHT)
+    # Portrait/dialogue cutscenes reuse the field register family while their
+    # actual backdrop is black. UI art may touch the old native boundaries;
+    # requiring a black majority in the whole native image prevents that art
+    # from turning an intentional black stage into a false margin defect.
+    return center_nonblack_ratio < 0.75
 
 
 def edge_score(pixels: bytes, width: int, edge_x: int) -> dict:
@@ -384,17 +404,36 @@ def analyze_policy_and_margins(wide: dict, telemetry: dict) -> tuple[list[dict],
                     "scene remained deliberately centered because no authored "
                     "margin policy matched", policy=policy))
         elif policy in AUTHORED_POLICIES:
-            center = crop_rgb(pixels, width, left, left + NATIVE_WIDTH)
-            center_nonblack_ratio = (
-                nonblack_pixels(center) / (NATIVE_WIDTH * HEIGHT))
+            if authored_black_backdrop(pixels, width, left, right):
+                key = ("black_backdrop", policy, tuple(state["bgcnt"]),
+                       tuple(state["hofs"]), tuple(state["vofs"]))
+                if key not in seen_safe:
+                    seen_safe.add(key)
+                    safe.append(finding(
+                        "authored_black_backdrop", "safe", frame,
+                        "both margins and most of the native backdrop are "
+                        "black; portrait/dialogue art remains centered",
+                        policy=policy))
+                continue
+            adjacent = {
+                "left": crop_rgb(pixels, width, left,
+                                 left + max(left, 1)),
+                "right": crop_rgb(pixels, width,
+                                  left + NATIVE_WIDTH - max(right, 1),
+                                  left + NATIVE_WIDTH),
+            }
             for side, margin in (("left", left_pixels), ("right", right_pixels)):
+                edge_band = adjacent[side]
+                edge_nonblack_ratio = (nonblack_pixels(edge_band) /
+                                       max(len(edge_band) // 3, 1))
                 if margin and nonblack_pixels(margin) == 0 and \
-                        center_nonblack_ratio > 0.10:
+                        edge_nonblack_ratio > 0.10:
                     candidates.append(finding(
                         "authored_margin_blank", "strong", frame,
                         f"{side} margin is entirely black while policy "
                         f"{policy} claims authored continuation",
-                        policy=policy, side=side))
+                        policy=policy, side=side,
+                        adjacent_edge_nonblack=round(edge_nonblack_ratio, 5)))
     return candidates, safe
 
 
@@ -405,6 +444,9 @@ def analyze_seams(wide: dict, telemetry: dict) -> list[dict]:
         if not state or state["policy"] not in AUTHORED_POLICIES:
             continue
         left = int(state["extra_left"])
+        right = int(state["extra_right"])
+        if authored_black_backdrop(pixels, width, left, right):
+            continue
         for side, edge in (("left", left), ("right", left + NATIVE_WIDTH)):
             score = edge_score(pixels, width, edge)
             if score["ratio"] >= 3.0 and score["excess"] >= 18.0:
@@ -413,14 +455,28 @@ def analyze_seams(wide: dict, telemetry: dict) -> list[dict]:
                     f"{side} old native boundary is {score['ratio']:.2f}x "
                     "stronger than nearby column edges",
                     side=side, score=score, policy=state["policy"]))
-    keys = {(item["frame"], item["side"]) for item in candidates}
+    by_key = {(item["frame"], item["side"]): item for item in candidates}
     frames = sorted(wide)
-    neighbors = {frame: set(frames[max(0, index - 1):index] +
-                            frames[index + 1:index + 2])
-                 for index, frame in enumerate(frames)}
-    return [item for item in candidates
-            if any((neighbor, item["side"]) in keys
-                   for neighbor in neighbors[item["frame"]])]
+    retained = []
+    for side in ("left", "right"):
+        run = []
+        for frame in frames + [None]:
+            item = by_key.get((frame, side)) if frame is not None else None
+            if item:
+                run.append(item)
+                continue
+            if len(run) >= 2:
+                representative = max(
+                    run, key=lambda value: value["score"]["excess"])
+                representative["run_start"] = run[0]["frame"]
+                representative["run_end"] = run[-1]["frame"]
+                representative["sample_count"] = len(run)
+                representative["evidence"] += (
+                    f"; persisted across {len(run)} adjacent samples "
+                    f"({run[0]['frame']}..{run[-1]['frame']})")
+                retained.append(representative)
+            run = []
+    return retained
 
 
 def analyze_temporal_freeze(wide: dict, telemetry: dict) -> list[dict]:
@@ -638,6 +694,21 @@ def main() -> int:
 
     counts = Counter(item["kind"] for item in findings)
     policy_counts = Counter(item["policy"] for item in telemetry)
+    coverage_states = [state for state in coverage.values() if state]
+    coverage_fully_static = (
+        len(coverage_states) == len(coverage) and all(
+            state["ok"] and state["coverage"] == "FULLY_STATIC" and
+            state["distinct_misses"] == 0 and
+            state["interpreted_insns"] == 0
+            for state in coverage_states))
+    coverage_signatures = {
+        (state["ok"], state["coverage"], state["distinct_misses"],
+         state["interpreted_insns"])
+        for state in coverage_states
+    }
+    coverage_matches_across_runs = (
+        len(coverage_states) == len(coverage) and
+        len(coverage_signatures) == 1)
     report = {
         "schema": "swordcraft3-widescreen-route-audit-v1",
         "range": {"start": args.start, "end": args.end, "step": args.step,
@@ -663,6 +734,14 @@ def main() -> int:
             "capture_integrity_errors": counts.get("capture_integrity", 0),
             "accepted_for_visual_review":
                 counts.get("capture_integrity", 0) == 0,
+            "release_validation_eligible":
+                counts.get("capture_integrity", 0) == 0 and
+                coverage_fully_static,
+            "diagnostic_comparison_eligible":
+                counts.get("capture_integrity", 0) == 0 and
+                coverage_matches_across_runs,
+            "coverage_fully_static": coverage_fully_static,
+            "coverage_matches_across_runs": coverage_matches_across_runs,
             "by_detector": dict(sorted(counts.items())),
             "by_policy": dict(sorted(policy_counts.items())),
             "limitations": [
@@ -670,6 +749,7 @@ def main() -> int:
                 "Composite images cannot prove world/map identity without a map-data sidecar.",
                 "Seams and temporal freezes remain heuristics and require visual review.",
                 "Object intent and activation/culling need semantic state or a reference trace.",
+                "Matching non-static coverage permits diagnosis, not release acceptance.",
                 "Run a coarse route first, then recapture suspect intervals at step 1.",
             ],
         },

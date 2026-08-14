@@ -119,31 +119,32 @@ compare against ground truth derived from map data rather than asserting
 non-black pixels.
 
 Battle registers (`SWORDCRAFT3_WS_DEBUG=1` dump: `dispcnt=3740
-bgcnt=0000/450B/0305/080B winin=553F winout=553B`) show the arena art rides
-BG1 on a 512px-wide map that the battle engine draws in full, so the battle
-family now continues BG1 wrapped (real authored columns, not a stale seam)
-and mirrors BG2. WINOUT excludes BG2, which previously blanked reflected
-margins whenever a guest window was active; the reusable renderer now gates a
-provider-remapped margin sample by its source column's window control instead
-of the margin's WINOUT fallback. Rows beside the native-width HUD panels
-show the continued arena backdrop while the HUD itself remains centered.
+bgcnt=0000/450B/0305/080B winin=553F winout=553B`) initially suggested that
+BG1's 512px map was fully authored. The later temporal audit disproved that
+snapshot-based conclusion: after arena camera motion, BG1's left margin became
+entirely black while the right remained populated. BG1 and BG2 now both use
+safe nearest-edge reflection. WINOUT excludes BG2, so the reusable renderer
+gates each provider-remapped margin sample by its source column's window
+control. Rows beside the native-width HUD panels show reflected arena scenery
+while the HUD itself remains centered.
 
 Headless Linux verification (sandboxed rebuild of the stock corpus,
 `FULLY_STATIC` over the 4,400-frame canonical route): trace checkpoints
 1,200/1,800/3,000/4,400 are title/menu/cutscene layouts and now pillarbox
 with a pixel-identical native center (0 mismatches at 4,400). The English
 beta field-dialogue save state renders 284x160 with zero black margin pixels
-(mirrored scenery), and the first-battle state renders real continued arena
-margins as described above. Stock-corpus runs of the beta ROM bridge one
-translation-specific PC through self-heal, consistent with the known beta
-coverage gap.
+(mirrored scenery), and the first-battle state appeared to render continued
+arena margins. That isolated result was superseded by the longer route audit,
+which found BG1's empty margin only after camera motion. Stock-corpus runs of
+the beta ROM bridge one translation-specific PC through self-heal, consistent
+with the known beta coverage gap.
 
 The rebuilt Windows beta target was then checked from the same field-dialogue
 and first-battle save slots at 240x160 and 284x160. Both widened captures kept
 the centered native image pixel-identical (0/38,400 mismatches) and contained
-0/7,040 black margin pixels. The field used reflected scenery; the battle used
-continued BG1 arena scenery with its reflected BG2 foreground. The battle run
-still reported the two known dynamic-IWRAM self-heal misses.
+0/7,040 black margin pixels. Those isolated snapshots predate the route-scale
+BG1 correction and are not evidence that the whole arena map was authored. The
+battle run still reported the two known dynamic-IWRAM self-heal misses.
 
 Sidecar research notes (csm3): per-BG stream state lives at `0x030042C0`
 (stride 20, shadow ring pointer at +0x10); the VBlank DMA queue at
@@ -181,6 +182,46 @@ See [WIDESCREEN_AUDIT.md](WIDESCREEN_AUDIT.md) for detector definitions,
 limitations, the one-command wrapper, and the coarse-to-frame-by-frame review
 workflow.
 
+### English-beta field/battle route audit (2026-08-13, later)
+
+The owner recorded a clean input route from English-beta Slot 2: 694 input
+changes over guest frames 6,670..17,292, with no rewind or mid-route state
+load. The route covers the complete first battle, Mode 0/Mode 1 combat-effect
+transitions, the post-battle cutscene, and subsequent field/dialogue play.
+
+The first coarse Native/Wide comparison exposed two audit-contract problems
+and one real rendering defect:
+
+- policy telemetry described the next rendered image but was attributed to the
+  just-completed frame, producing one false transition leak; telemetry now
+  records both the applicable PNG frame and its observation boundary;
+- repeated per-frame seam alerts are now collapsed into persistent runs, and
+  intentional black portrait stages are retained as safe observations;
+- BG1's supposedly fully authored 512px battle map produced a completely black
+  left margin after camera motion. Frame-by-frame BG1/BG2 isolation proved the
+  source assumption wrong, so battle BG1 now reflects like BG2.
+
+The exact 101-frame battle-entry repeat after the BG1 fix recorded zero blank
+margins and zero center mismatches. A separate 91-frame battle-motion repeat
+recorded zero blank margins, temporal freezes, fail-closed leaks, or center
+mismatches across composite, BG1, and BG2 captures.
+
+The final fixed coarse pass sampled 359 aligned Native/Wide frames over guest
+frames 6,700..17,440. It recorded zero capture-integrity errors, zero center
+mismatches, zero blank margins, zero temporal freezes, and zero pillarbox
+leaks. Six persistent seam candidates remain; visual review identifies them as
+the intended old-native-edge boundaries of centered battle HUD, dialogue, or
+portrait art, and the report keeps them as review evidence rather than hiding
+them. Seven safe observations cover fail-closed layouts and the intentional
+black portrait stage.
+
+This beta result is diagnostic-only. Native and Wide have the same execution
+signature (`NOT_STATIC`, three distinct gaps, 36,810,454 interpreted
+instructions), so the comparison is aligned, but it is not eligible for
+release acceptance until the dynamic IWRAM/static coverage boundary closes.
+The ignored authoritative report is
+`validation/adaptive-widescreen/route-audit-beta-field-battle-fixed-coarse`.
+
 ## English beta BPS compatibility
 
 The supplied beta patch was applied with the repository's reusable BPS engine.
@@ -217,7 +258,9 @@ patched output to this exact beta release.
 
 ## Remaining coverage boundary
 
-The next deterministic trace must make the game-specific partner selection and
-then cover exploration, map transitions, the first battle, in-game saving, and
-post-battle transitions. Rendering/audio comparison against a reference
-emulator and longer save-state/rewind soak tests also remain open.
+The next strict-static stock trace must make the game-specific partner
+selection and then cover exploration, map transitions, the first battle,
+in-game saving, and post-battle transitions. The beta recording now covers the
+visual first-battle/post-battle route, but its dynamic IWRAM bridge prevents it
+from closing the static boundary. Rendering/audio comparison against a
+reference emulator and longer save-state/rewind soak tests also remain open.

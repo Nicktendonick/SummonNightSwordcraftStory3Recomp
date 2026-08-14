@@ -48,16 +48,18 @@ work in `recomp-ui`.
   and verified Japanese ROM.
 - Experimental Native, Adaptive, and fixed 16:9 views. Reviewed field layers
   use reflected nearest-edge samples because their 256px ring buffers cannot
-  supply true off-screen columns. Battles combine authored columns from a
-  reviewed 512px arena layer with a reflected foreground layer. Native HUD and
-  dialogue chrome stay centered, margin sprites are clipped, and unreviewed
-  layouts pillarbox. See the margin-policy revision in
+  supply true off-screen columns. Battle BG1/BG2 use the same safe reflection:
+  temporal layer isolation disproved the earlier assumption that the nominal
+  512px BG1 always contains authored margin columns. Native HUD and dialogue
+  chrome stay centered, margin sprites are clipped, and unreviewed layouts
+  pillarbox. See the margin-policy revisions in
   [VALIDATION.md](VALIDATION.md).
 - A deterministic Native/Wide route auditor with exact center comparison,
   per-frame game-policy telemetry, temporal seam/freeze ranking, reusable
   BG/OBJ isolation, strict coverage checks, raw-evidence reuse, and an HTML
-  report. Its current canonical route validates only fail-closed pillarboxing;
-  overworld and battle route coverage remain the next acceptance milestone.
+  report. The stock route validates fail-closed pillarboxing; a separate beta
+  recording covers the full first battle and post-battle field/cutscene route,
+  but remains diagnostic-only because three dynamic beta gaps are not static.
 
 See [README.md](../README.md), [BRINGUP.md](BRINGUP.md),
 [VALIDATION.md](VALIDATION.md), and
@@ -112,21 +114,22 @@ large generated shards; use one compiler worker on memory-constrained systems.
 
 ## Latest widescreen evidence
 
-The rebuilt Windows beta target was captured from the field-dialogue and first-
-battle save slots at 240x160 and 284x160. Both widened captures preserved the
-centered native image exactly and had no black margin pixels. The field used
-reflected scenery; the battle used authored BG1 arena columns plus its reflected
-BG2 foreground. Adaptive 262x160 and broader gameplay captures should still be
-retaken before release. Local screenshots live below the ignored
-`validation/adaptive-widescreen` directory and are not part of a normal clone.
+The rebuilt Windows beta target replayed frames 6,700..17,440 from the first
+battle through its post-battle cutscene and field/dialogue route. Aligned
+Native/Wide centers matched exactly. Frame-by-frame BG isolation exposed and
+then verified the fix for BG1's empty left margin during camera motion; BG1 and
+BG2 now reflect safely. No blank margins, temporal freezes, fail-closed leaks,
+or center mismatches remain in the fixed reports. Six retained seam candidates
+are centered HUD/dialogue/portrait boundaries on visual review. Adaptive
+262x160 and later-game routes still need coverage. Local evidence lives below
+the ignored `validation/adaptive-widescreen` directory.
 
 ## Known limitations and review targets
 
 - Widescreen remains experimental. Free exploration, map transitions, later
   battles, menus, and display-mode effects need broader manual coverage.
-- Battle widening combines authored and reflected presentation layers; it does
-  not expand simulation or camera geometry. Sprites, collision, and HUD
-  coordinates remain native.
+- Battle widening reflects presentation layers; it does not expand simulation
+  or camera geometry. Sprites, collision, and HUD coordinates remain native.
 - ROM patches that change executable code need a matching static corpus. The
   beta therefore has its own executable instead of using the stock corpus.
 - Some English-beta battle-state headless checks still bridge dynamic IWRAM

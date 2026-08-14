@@ -89,6 +89,17 @@ class WidescreenRouteAuditTests(unittest.TestCase):
         self.assertEqual(findings[0]["kind"], "pillarbox_policy_leak")
         self.assertEqual(safe[0]["kind"], "unclassified_scene_pillarboxed")
 
+    def test_black_portrait_stage_is_a_safe_observation(self):
+        pixels = image(284)
+        for y in range(40, 120):
+            for x in range(80, 160):
+                set_pixel(pixels, 284, x, y, b"\x80\x40\x20")
+        findings, safe = AUDIT.analyze_policy_and_margins(
+            {24: (284, 160, bytes(pixels), Path("wide.png"))},
+            {24: state(24, "field_reflect")})
+        self.assertEqual(findings, [])
+        self.assertEqual(safe[0]["kind"], "authored_black_backdrop")
+
     def test_seam_requires_neighboring_samples(self):
         frames = {}
         telemetry = {}

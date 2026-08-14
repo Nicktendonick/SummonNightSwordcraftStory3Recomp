@@ -132,9 +132,10 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     // opposite map seam plus stale streamer columns (observed as repeated or
     // garbled art in free play). Until a map-data sidecar can supply true
     // field tiles, reviewed field layers use reflected nearest-edge samples.
-    // Battle may additionally authorize its reviewed, fully drawn 512px BG1;
-    // unreviewed 512px layouts still fail closed. Affine/bitmap modes remain
-    // pillarboxed.
+    // Battle uses the same safe reflection fallback. Route-scale BG isolation
+    // proved that its nominally 512px BG1 still exposes empty columns as the
+    // arena camera moves; map dimensions alone are not proof that both margins
+    // contain authored scenery. Affine/bitmap modes remain pillarboxed.
     if (!forced_blank && bg_mode == 0) {
         std::uint16_t bgcnt[4]{};
         unsigned visible_layers = 0;
@@ -172,15 +173,14 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
         if (battle_scene) {
             margin_layers |= 1u << 2;
             mirrored_layers |= 1u << 2;
-            // The battle arena art itself rides BG1 on a 512px-wide map that
-            // the battle engine draws in full, so its off-viewport columns
-            // are real authored scenery rather than a stale ring seam.
-            // Continue it wrapped; the window registers gate it exactly as
-            // they gate the visible arena.
+            // BG1 carries the distant arena art on a 512px tilemap, but the
+            // deterministic battle route found undrawn columns at the left
+            // native boundary after camera motion. Reflect it instead of
+            // treating nominal map width as evidence of valid world content.
             if ((visible_layers & (1u << 1)) != 0 &&
                 (bgcnt[1] & 0x4000u) != 0) {
                 margin_layers |= 1u << 1;
-                wrap_ok_layers |= 1u << 1;
+                mirrored_layers |= 1u << 1;
             }
         }
     }
@@ -225,7 +225,12 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     gba::g_ws_pillarbox_right = 0;
     gba::g_ws_obj_native_clip = 1;
 
-    if (should_emit_audit_frame(frame->frame_count)) {
+    // The runtime publishes this snapshot at the completed-frame boundary.
+    // The selected policy governs the framebuffer rendered next, whose dump
+    // label is frame_count + 1. Attribute telemetry to that image explicitly
+    // so one-frame display-mode transitions are not compared out of phase.
+    const std::uint64_t audit_capture_frame = frame->frame_count + 1u;
+    if (should_emit_audit_frame(audit_capture_frame)) {
         std::uint16_t bgcnt[4]{};
         std::uint16_t hofs[4]{};
         std::uint16_t vofs[4]{};
@@ -242,10 +247,11 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
         }
         const char* policy = forced_blank ? "forced_blank" :
             bg_mode != 0 ? "unsupported_mode" :
-            battle_scene ? "battle_authored" :
+            battle_scene ? "battle_reflect" :
             field_scene ? "field_reflect" : "pillarbox";
         std::fprintf(stderr,
             "swordcraft3_widescreen_frame={\"frame\":%llu,"
+            "\"policy_observed_frame\":%llu,"
             "\"view_width\":%u,\"extra_left\":%u,\"extra_right\":%u,"
             "\"policy\":\"%s\",\"dispcnt\":%u,\"bg_mode\":%u,"
             "\"forced_blank\":%s,\"visible_layers\":%u,"
@@ -255,6 +261,7 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
             "\"bgcnt\":[%u,%u,%u,%u],\"hofs\":[%u,%u,%u,%u],"
             "\"vofs\":[%u,%u,%u,%u],"
             "\"winin\":%u,\"winout\":%u}\n",
+            static_cast<unsigned long long>(audit_capture_frame),
             static_cast<unsigned long long>(frame->frame_count),
             frame->view_width, frame->extra_left, frame->extra_right,
             policy, dispcnt, bg_mode, forced_blank ? "true" : "false",

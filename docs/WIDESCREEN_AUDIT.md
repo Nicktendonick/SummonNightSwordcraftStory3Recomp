@@ -13,8 +13,10 @@ The DKC2 audit work established several rules that apply here:
 1. Compare aligned Native and Wide runs. Every native-center pixel must remain
    identical; a non-black margin is not sufficient evidence.
 2. Record the selected source/policy, not just the final image. Swordcraft logs
-   whether each sampled frame used field reflection, authored battle
-   continuation, or fail-closed pillarboxing, plus BG registers and scroll.
+   whether each sampled frame used field reflection, battle reflection, or
+   fail-closed pillarboxing, plus BG registers and scroll.
+   The record also retains the completed-frame boundary where the policy was
+   observed; `frame` is the following PNG frame to which that policy applies.
 3. Audit time, not only isolated frames. Persistent boundary seams and margins
    that remain frozen while their authorized BG scrolls are better candidates
    than a single unusual column.
