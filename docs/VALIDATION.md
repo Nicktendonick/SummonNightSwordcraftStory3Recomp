@@ -293,3 +293,26 @@ in-game saving, and post-battle transitions. The beta recording now covers the
 visual first-battle/post-battle route, but its dynamic IWRAM bridge prevents it
 from closing the static boundary. Rendering/audio comparison against a
 reference emulator and longer save-state/rewind soak tests also remain open.
+
+## Upstream runtime refresh (2026-08-20)
+
+The game now targets `mstan/gbarecomp` main at `6571cb3`, with the reusable
+deterministic capture controls and Swordcraft 3 map-provider hooks replayed on
+top as `c3b1104` and `2cf1c0a`. Both the stock and English-beta executables
+built successfully with one compiler worker.
+
+The focused `swordcraft3_widescreen_route_audit_unit`,
+`runtime_monolith_guard`, and `ppu_smoke_tests` tests passed. The deterministic
+English-beta field/battle audit sampled frames 10060 through 11060 at step 20;
+all 51 Wide composite PNGs were byte-identical to the accepted
+`true-map-final-regression` capture. It retained the same seven known margin
+findings and three dynamic IWRAM misses, with no native-center mismatch or
+capture-integrity error.
+
+`JRickey/gba-recomp` was evaluated as a separate Rust/C11 implementation, not
+a source-compatible engine update. Its most relevant transferable performance
+ideas are complete function-boundary coverage, profiling code copied to IWRAM,
+bounded parallel translation, and differential verification. Closing this
+beta's three dynamic IWRAM gaps is the most direct next experiment; its GPU
+presentation architecture does not provide a drop-in widescreen optimization
+for this C++ runtime.
