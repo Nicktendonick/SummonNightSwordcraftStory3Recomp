@@ -119,3 +119,25 @@ The audit can prove center preservation and detect several temporal or
 presentation defects, but it still cannot infer artistic intent for every map,
 cutscene overlay, battle effect, or sprite. New routes and isolated layer
 captures remain required as those scene families are encountered.
+
+## Capability contract and debugger
+
+Every capture now records a per-frame architectural guest-state trace. The
+route report compares CPU, RAM, VRAM, palette, OAM, I/O, audio, save, and clock
+hashes between Native and Wide; PPU presentation state is deliberately excluded
+because view width is the variable under test. The route-scoped contract at
+`tests/contracts/field-battle-widescreen.json` fails closed on missing
+samples, guest-state divergence, black authored margins, and unreviewed seams:
+
+```powershell
+python .\tools\check_widescreen_contract.py `
+  .\tests\contracts\field-battle-widescreen.json `
+  .\validation\adaptive-widescreen\<capture>\report.json
+```
+
+For interactive diagnosis, run `tools/launch_visible_debugger.ps1`. F2 through
+F7 isolate the composite and individual BG/OBJ layers, F8 pauses, F9 advances
+one exact guest frame, and F10 exports the frame, save state, state hash, report,
+and widescreen provenance into the project-local validation directory. The same
+session records input changes, delivered PCM, phase timing, and coverage so a
+failure can be replayed without another screen recording.

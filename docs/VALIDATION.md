@@ -316,3 +316,31 @@ bounded parallel translation, and differential verification. Closing this
 beta's three dynamic IWRAM gaps is the most direct next experiment; its GPU
 presentation architecture does not provide a drop-in widescreen optimization
 for this C++ runtime.
+
+## DKC audit transfer and hybrid map-edge acceptance (2026-08-24)
+
+The English-beta route at frames 10060..11060 now records aligned Native/Wide
+architectural hashes. All 51 samples matched for guest-visible CPU, memory,
+video memory, I/O, audio, save, and clock state. The clean-history run retained
+matching non-static coverage signatures in both modes (three misses and
+36,810,454 interpreted instructions) and passed the route capability contract.
+
+The true-map adapter previously returned transparency after reaching a complete
+map's physical boundary. That caused five black-margin findings and a persistent
+left native-boundary seam. It now uses authentic source-map tiles while they
+exist and reflects the reviewed native edge only beyond the finite map. The new
+capture has zero black-margin findings and no unreviewed map seam. One composite
+edge remains allowlisted at frame 10060: it is the intentional end of native
+dialogue chrome while the field continues behind it.
+
+An evidence-only Tier-2 run enabled dynamic-RAM overlay healing. All 29 observed
+targets healed, including `0x03003240` (621,421 native calls in the coverage
+record); the warm Wide pass completed with zero interpreted instructions. This
+is a promising performance result, not yet a release default: clean and warm
+cache histories must remain separately reported.
+
+Focused verification passed: the beta executable built against current official
+`recomp-ui`, the widescreen-audit unit suite (10 tests), `ppu_smoke_tests`, and
+`runtime_monolith_guard`. The reference-audio path now supports delivered S16
+PCM dumps plus `gbarecomp/tools/compare_audio_pcm.py`; a trusted emulator PCM
+capture is still required for a meaningful external audio comparison.

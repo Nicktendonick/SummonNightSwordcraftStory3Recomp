@@ -289,6 +289,7 @@ def capture_run(args: argparse.Namespace, output_dir: Path, mode: str,
         "SDL_XINPUT_ENABLED": "0",
         "GBARECOMP_COVERAGE_JSON": str((layer_dir / "coverage.json").resolve()),
         "GBARECOMP_MISS_FRAG": str((layer_dir / "misses.toml.frag").resolve()),
+        "GBARECOMP_STATE_TRACE": str((layer_dir / "state.jsonl").resolve()),
     })
     if args.strict_static:
         run_env["GBARECOMP_STRICT_STATIC"] = "1"
@@ -356,6 +357,49 @@ def load_images(output_dir: Path, mode: str, layers: tuple[str, ...],
             layer_images[frame] = (width, height, pixels, path)
         images[layer] = layer_images
     return images, findings
+
+
+GUEST_STATE_KEYS = ("cpu", "iwram", "ewram", "vram", "pal", "oam",
+                    "io", "audio", "save", "clock")
+
+
+def load_state_trace(path: Path, expected: list[int], label: str) -> tuple[dict, list[dict]]:
+    rows = {}
+    findings = []
+    try:
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("schema") != "gbarecomp-state-trace-v1":
+                raise ValueError(f"line {line_number}: unsupported schema")
+            frame = int(row["frame"])
+            if frame in rows:
+                raise ValueError(f"line {line_number}: duplicate frame {frame}")
+            rows[frame] = row
+    except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        return {}, [finding("capture_integrity", "exact", expected[0],
+                            f"{label} state trace is invalid: {error}", run=label)]
+    missing = [frame for frame in expected if frame not in rows]
+    if missing:
+        findings.append(finding(
+            "capture_integrity", "exact", missing[0],
+            f"{label} state trace misses {len(missing)} sampled frame(s)", run=label))
+    return {frame: rows[frame] for frame in expected if frame in rows}, findings
+
+
+def analyze_guest_state(native: dict, wide: dict) -> list[dict]:
+    findings = []
+    for frame in sorted(set(native) & set(wide)):
+        mismatched = [key for key in GUEST_STATE_KEYS
+                      if native[frame].get(key) != wide[frame].get(key)]
+        if mismatched:
+            findings.append(finding(
+                "native_wide_guest_state_divergence", "exact", frame,
+                "Native and Wide guest state differ in: " + ", ".join(mismatched),
+                fields=mismatched))
+            break
+    return findings
 
 
 def analyze_center(native: dict, wide: dict, telemetry: dict) -> list[dict]:
@@ -681,8 +725,17 @@ def main() -> int:
     telemetry_by_frame = {int(item["frame"]): item for item in telemetry}
     native = native_layers["composite"]
     wide = wide_layers["composite"]
+    native_state, state_integrity = load_state_trace(
+        output_dir / "raw" / "native" / "composite" / "state.jsonl",
+        expected, "native/composite")
+    wide_state, more_state_integrity = load_state_trace(
+        output_dir / "raw" / "wide" / "composite" / "state.jsonl",
+        expected, "wide/composite")
+    integrity.extend(state_integrity)
+    integrity.extend(more_state_integrity)
 
     findings = list(integrity)
+    findings.extend(analyze_guest_state(native_state, wide_state))
     findings.extend(analyze_center(native, wide, telemetry_by_frame))
     policy_findings, safe = analyze_policy_and_margins(wide, telemetry_by_frame)
     findings.extend(policy_findings)
@@ -744,6 +797,9 @@ def main() -> int:
                 coverage_matches_across_runs,
             "coverage_fully_static": coverage_fully_static,
             "coverage_matches_across_runs": coverage_matches_across_runs,
+            "guest_state_matches_across_native_wide":
+                counts.get("native_wide_guest_state_divergence", 0) == 0 and
+                not state_integrity and not more_state_integrity,
             "by_detector": dict(sorted(counts.items())),
             "by_policy": dict(sorted(policy_counts.items())),
             "limitations": [

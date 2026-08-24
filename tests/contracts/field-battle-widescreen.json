@@ -1,0 +1,23 @@
+{
+  "schema": "swordcraft3-widescreen-capability-v1",
+  "route": "English beta field/battle route 02",
+  "frame_range": { "start": 10060, "end": 11060, "step": 20 },
+  "required_policies": ["field_true_map"],
+  "require_native_wide_guest_state_match": true,
+  "allowed_findings": [
+    {
+      "kind": "native_boundary_seam",
+      "frame": 10060,
+      "side": "right",
+      "reason": "Native-width dialogue chrome ends at this boundary while the field layer correctly continues behind it."
+    }
+  ],
+  "maximum_findings_by_detector": {
+    "authored_margin_blank": 0,
+    "native_boundary_seam": 0
+  },
+  "notes": [
+    "This contract is deliberately route-scoped; it is not a whole-game widescreen claim.",
+    "Expand it only after deterministic captures cover additional scene families."
+  ]
+}

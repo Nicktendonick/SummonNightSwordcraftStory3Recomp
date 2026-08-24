@@ -147,6 +147,31 @@ class WidescreenRouteAuditTests(unittest.TestCase):
             self.assertEqual(findings[0]["kind"], "capture_integrity")
             self.assertEqual(findings[0]["run"], "wide/composite")
 
+    def test_guest_state_comparison_reports_first_divergence(self):
+        base = {key: "00" for key in AUDIT.GUEST_STATE_KEYS}
+        native = {12: {"frame": 12, **base}, 24: {"frame": 24, **base}}
+        changed = dict(base)
+        changed["iwram"] = "01"
+        wide = {12: {"frame": 12, **base}, 24: {"frame": 24, **changed}}
+        findings = AUDIT.analyze_guest_state(native, wide)
+        self.assertEqual(findings[0]["kind"],
+                         "native_wide_guest_state_divergence")
+        self.assertEqual(findings[0]["frame"], 24)
+        self.assertEqual(findings[0]["fields"], ["iwram"])
+
+    def test_state_trace_loader_fails_closed_on_missing_sample(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "state.jsonl"
+            path.write_text(json.dumps({
+                "schema": "gbarecomp-state-trace-v1", "frame": 12,
+                **{key: "00" for key in AUDIT.GUEST_STATE_KEYS},
+            }) + "\n", encoding="utf-8")
+            rows, findings = AUDIT.load_state_trace(
+                path, [12, 24], "native/composite")
+            self.assertEqual(sorted(rows), [12])
+            self.assertEqual(findings[0]["kind"], "capture_integrity")
+            self.assertEqual(findings[0]["frame"], 24)
+
 
 if __name__ == "__main__":
     unittest.main()

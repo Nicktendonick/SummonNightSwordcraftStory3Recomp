@@ -17,6 +17,10 @@ void swordcraft3_true_map_update(
 // wider than the native viewport for the current frame.
 unsigned swordcraft3_true_map_layers();
 
+// Whether a viewport-relative X coordinate still lies inside the complete
+// source map for this layer.
+bool swordcraft3_true_map_contains_x(int bg, int hw_x);
+
 // gba::g_ws_tilemap_provider-compatible callback.
 int swordcraft3_true_map_tilemap(int bg, int hw_x, int screen_y,
                                  std::uint16_t* out_entry);

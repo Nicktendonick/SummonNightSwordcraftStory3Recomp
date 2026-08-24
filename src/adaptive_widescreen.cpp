@@ -109,12 +109,21 @@ int swordcraft3_margin_tilemap(int bg, int hw_x, int screen_y,
 }
 
 int swordcraft3_margin_x(int bg, int output_x, int, int* out_hw_x) {
-    if (!out_hw_x || bg < 0 || bg > 3 ||
-        (s_mirrored_bg_mask & (1u << static_cast<unsigned>(bg))) == 0) {
+    if (!out_hw_x || bg < 0 || bg > 3) {
         return 0;
     }
 
     const int hw_x = output_x - static_cast<int>(s_extra_left);
+    const unsigned layer_bit = 1u << static_cast<unsigned>(bg);
+    bool reflect = (s_mirrored_bg_mask & layer_bit) != 0;
+
+    // Complete field maps are finite. Prefer authentic neighboring tiles, but
+    // do not make the layer transparent at a physical map boundary: that was
+    // the source of the recorded black strips and hard native-edge seams.
+    if (!reflect && (s_true_map_bg_mask & layer_bit) != 0)
+        reflect = !swordcraft3_true_map_contains_x(bg, hw_x);
+    if (!reflect) return 0;
+
     if (hw_x < 0) {
         *out_hw_x = -hw_x - 1;
         return 1;
@@ -274,7 +283,9 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     s_extra_left = frame->extra_left;
     gba::g_ws_tilemap_provider = swordcraft3_margin_tilemap;
     gba::g_ws_bg_x_provider = swordcraft3_margin_x;
-    gba::g_ws_bg_x_provider_layers = mirrored_layers;
+    // True-map layers are remapped only when the requested pixel lies beyond
+    // the finite source map. All other wide pixels remain authentic map data.
+    gba::g_ws_bg_x_provider_layers = mirrored_layers | true_map_layers;
     gba::g_ws_authored_margin_layers = margin_layers ? 1 : 0;
     gba::g_ws_pillarbox = margin_layers ? 0 : 1;
     gba::g_ws_pillarbox_left = 0;
