@@ -108,12 +108,14 @@ future coverage work can prioritize common unsupported scene signatures.
 
 ## True-map source and remaining oracle gap
 
-Reviewed field scenes now resolve BG1..BG3 margin entries from the game's full
+Reviewed field scenes resolve BG1..BG3 margin entries from the game's full
 source tilemaps retained in its IWRAM background descriptors. This bypasses the
 256-pixel VRAM streaming rings and supplies the same neighboring tile identity
 that later scrolls into the native viewport. A layer whose descriptor or source
 map cannot be validated still falls back to the reviewed reflected-edge policy;
-unclassified scenes remain pillarboxed.
+unclassified scenes remain pillarboxed. When a valid complete map reaches its
+physical boundary, the provider deliberately leaves the remainder black instead
+of inventing reflected scenery across a transition edge.
 
 The audit can prove center preservation and detect several temporal or
 presentation defects, but it still cannot infer artistic intent for every map,
@@ -126,8 +128,9 @@ Every capture now records a per-frame architectural guest-state trace. The
 route report compares CPU, RAM, VRAM, palette, OAM, I/O, audio, save, and clock
 hashes between Native and Wide; PPU presentation state is deliberately excluded
 because view width is the variable under test. The route-scoped contract at
-`tests/contracts/field-battle-widescreen.json` fails closed on missing
-samples, guest-state divergence, black authored margins, and unreviewed seams:
+`tests/contracts/field-battle-widescreen.json` fails closed on missing samples,
+guest-state divergence, unexpected black margins, and unreviewed seams. Known
+physical transition boundaries are allowlisted by exact route frame and side:
 
 ```powershell
 python .\tools\check_widescreen_contract.py `

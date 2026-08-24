@@ -325,13 +325,13 @@ video memory, I/O, audio, save, and clock state. The clean-history run retained
 matching non-static coverage signatures in both modes (three misses and
 36,810,454 interpreted instructions) and passed the route capability contract.
 
-The true-map adapter previously returned transparency after reaching a complete
-map's physical boundary. That caused five black-margin findings and a persistent
-left native-boundary seam. It now uses authentic source-map tiles while they
-exist and reflects the reviewed native edge only beyond the finite map. The new
-capture has zero black-margin findings and no unreviewed map seam. One composite
-edge remains allowlisted at frame 10060: it is the intentional end of native
-dialogue chrome while the field continues behind it.
+The true-map adapter uses authentic source-map tiles while they exist. At the
+owner's request, pixels beyond a finite map's physical transition boundary stay
+black rather than reflecting scenery into an area the game never authored. Five
+left-side black margins on this route are therefore allowlisted by exact frame
+and side. One composite edge remains separately allowlisted at frame 10060: it
+is the intentional end of native dialogue chrome while the field continues
+behind it. Any new black margin or seam still fails the route contract.
 
 An evidence-only Tier-2 run enabled dynamic-RAM overlay healing. All 29 observed
 targets healed, including `0x03003240` (621,421 native calls in the coverage

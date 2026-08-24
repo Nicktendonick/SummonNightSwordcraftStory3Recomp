@@ -138,14 +138,6 @@ unsigned swordcraft3_true_map_layers() {
     return s_layer_mask;
 }
 
-bool swordcraft3_true_map_contains_x(int bg, int hw_x) {
-    if (bg < 0 || bg >= static_cast<int>(s_layers.size())) return false;
-    const LayerState& layer = s_layers[static_cast<unsigned>(bg)];
-    if (!layer.valid) return false;
-    const int source_x = static_cast<int>(layer.scroll_x) + hw_x;
-    return source_x >= 0 && source_x < static_cast<int>(layer.width_px);
-}
-
 int swordcraft3_true_map_tilemap(int bg, int hw_x, int screen_y,
                                  std::uint16_t* out_entry) {
     if (!out_entry || bg < 0 || bg >= static_cast<int>(s_layers.size()))
