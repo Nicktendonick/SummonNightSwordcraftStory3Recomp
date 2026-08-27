@@ -26,6 +26,9 @@ constexpr std::size_t kSourceMapOffset = 0x1Cu;
 constexpr std::size_t kRingMapOffset = 0x20u;
 constexpr std::size_t kPaletteBankOffset = 0x19u;
 constexpr std::size_t kTileBaseOffset = 0x1Au;
+constexpr std::size_t kBgHofsOffset = 0x10u;
+constexpr std::size_t kBgVofsOffset = 0x12u;
+constexpr std::size_t kBgScrollStride = 0x04u;
 
 struct GuestMemory {
     const std::uint8_t* ewram = nullptr;
@@ -40,8 +43,8 @@ struct LayerState {
     bool valid = false;
     std::uint16_t width_px = 0;
     std::uint16_t height_px = 0;
-    std::uint16_t scroll_x = 0;
-    std::uint16_t scroll_y = 0;
+    int source_scroll_x = 0;
+    int source_scroll_y = 0;
     std::uint16_t entry_bias = 0;
     std::uint32_t source_map = 0;
 };
@@ -83,12 +86,37 @@ std::uint16_t load16(const std::uint8_t* p) {
         p[0] | (static_cast<std::uint16_t>(p[1]) << 8));
 }
 
+std::uint16_t load16_or(const std::uint8_t* data, std::size_t size,
+                        std::size_t offset, std::uint16_t fallback) {
+    if (!data || offset + 1u >= size) return fallback;
+    return load16(data + offset);
+}
+
 std::uint32_t load32(const std::uint8_t* p) {
     return static_cast<std::uint32_t>(p[0]) |
         (static_cast<std::uint32_t>(p[1]) << 8) |
         (static_cast<std::uint32_t>(p[2]) << 16) |
         (static_cast<std::uint32_t>(p[3]) << 24);
 }
+
+constexpr int align_hardware_scroll(std::uint16_t game_scroll,
+                                    std::uint16_t hardware_scroll) {
+    // BGxHOFS/BGxVOFS retain only nine bits. Keep the descriptor's high map
+    // page, then select the nearest coordinate whose low nine bits match the
+    // position the PPU actually rendered. Swordcraft commonly submits HOFS
+    // one pixel ahead of its internal camera value; using the descriptor
+    // directly makes true-map margins change tile one pixel late, producing
+    // a vertical tear every eight pixels while the camera moves.
+    int delta = static_cast<int>(hardware_scroll & 0x01FFu) -
+        static_cast<int>(game_scroll & 0x01FFu);
+    if (delta > 255) delta -= 512;
+    if (delta < -256) delta += 512;
+    return static_cast<int>(game_scroll) + delta;
+}
+
+static_assert(align_hardware_scroll(55u, 56u) == 56);
+static_assert(align_hardware_scroll(510u, 2u) == 514);
+static_assert(align_hardware_scroll(2u, 510u) == -2);
 
 }  // namespace
 
@@ -111,8 +139,18 @@ void swordcraft3_true_map_update(
         LayerState layer{};
         layer.width_px = load16(state + kWidthOffset);
         layer.height_px = load16(state + kHeightOffset);
-        layer.scroll_x = load16(state + kScrollXOffset);
-        layer.scroll_y = load16(state + kScrollYOffset);
+        const std::uint16_t game_scroll_x = load16(state + kScrollXOffset);
+        const std::uint16_t game_scroll_y = load16(state + kScrollYOffset);
+        const std::uint16_t hardware_scroll_x = load16_or(
+            frame->io, frame->io_size,
+            kBgHofsOffset + bg * kBgScrollStride, game_scroll_x);
+        const std::uint16_t hardware_scroll_y = load16_or(
+            frame->io, frame->io_size,
+            kBgVofsOffset + bg * kBgScrollStride, game_scroll_y);
+        layer.source_scroll_x = align_hardware_scroll(
+            game_scroll_x, hardware_scroll_x);
+        layer.source_scroll_y = align_hardware_scroll(
+            game_scroll_y, hardware_scroll_y);
         layer.source_map = load32(state + kSourceMapOffset);
         const std::uint32_t ring_map = load32(state + kRingMapOffset);
         layer.entry_bias = static_cast<std::uint16_t>(
@@ -145,8 +183,8 @@ int swordcraft3_true_map_tilemap(int bg, int hw_x, int screen_y,
     const LayerState& layer = s_layers[static_cast<unsigned>(bg)];
     if (!layer.valid) return gba::kWsTilemapUnavailable;
 
-    const int source_x = static_cast<int>(layer.scroll_x) + hw_x;
-    const int source_y = static_cast<int>(layer.scroll_y) + screen_y;
+    const int source_x = layer.source_scroll_x + hw_x;
+    const int source_y = layer.source_scroll_y + screen_y;
     if (source_x < 0 || source_y < 0 ||
         source_x >= static_cast<int>(layer.width_px) ||
         source_y >= static_cast<int>(layer.height_px)) {

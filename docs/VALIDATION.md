@@ -344,3 +344,24 @@ Focused verification passed: the beta executable built against current official
 `runtime_monolith_guard`. The reference-audio path now supports delivered S16
 PCM dumps plus `gbarecomp/tools/compare_audio_pcm.py`; a trusted emulator PCM
 capture is still required for a meaningful external audio comparison.
+
+## Overworld true-map scroll alignment (2026-08-27)
+
+Visible-debugger captures at guest frames 19,663 and 20,440 exposed repeating
+vertical tears in the added overworld margins during horizontal camera motion.
+The game's background descriptors lagged the submitted BG hardware scroll by
+one pixel (`scroll_x=55`, `BGxHOFS=56` and later `66`/`67`). The true-map
+provider selected tile identity from the descriptor but selected the pixel
+inside that tile from the PPU's hardware scroll, so each margin tile changed
+one pixel late.
+
+The provider now aligns the descriptor's full map-page coordinate to the
+nearest coordinate with the PPU's nine-bit `BGxHOFS`/`BGxVOFS` value. This
+removes the tears without changing the authentic viewport and still supports
+maps whose coordinates cross the hardware 512-pixel wrap.
+
+Verification rebuilt the English-beta executable, replayed both supplied
+states with BG1/BG2/BG3 isolation, and replayed 30 aligned Native/Wide samples
+over 120 recorded movement frames. All 30 native centers matched exactly;
+there were no strong old-boundary seam samples or unexpected black margins.
+The widescreen audit's 10 focused unit tests also passed.

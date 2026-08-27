@@ -124,6 +124,13 @@ are centered HUD/dialogue/portrait boundaries on visual review. Adaptive
 262x160 and later-game routes still need coverage. Local evidence lives below
 the ignored `validation/adaptive-widescreen` directory.
 
+The 2026-08-27 visible-debugger session added a free-overworld regression at
+frames 19,663 and 20,440. It found that the game-owned map descriptor can lag
+the live BG hardware scroll by one pixel, which made true-map margin tiles
+change one pixel late. The game adapter now aligns the descriptor's full map
+page to `BGxHOFS`/`BGxVOFS`. A 30-sample recorded-motion replay preserved every
+native-center pixel and produced no strong native-boundary seams.
+
 ## Known limitations and review targets
 
 - Widescreen remains experimental. Free exploration, map transitions, later
