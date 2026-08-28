@@ -117,6 +117,13 @@ unclassified scenes remain pillarboxed. When a valid complete map reaches its
 physical boundary, the provider deliberately leaves the remainder black instead
 of inventing reflected scenery across a transition edge.
 
+Some Swordcraft boundaries are transparent tiles inside the allocated source
+map rather than coordinates beyond it. In validated true-map fields, BG1..BG3
+therefore also define a final margin-coverage mask. If none of those world
+layers emits an opaque pixel, the black boundary is composited above OBJ and
+BG0 portrait/UI pixels. Valid margin scenery still admits widened objects, and
+OBJ-only debugger captures deliberately remain unmasked for diagnosis.
+
 The audit can prove center preservation and detect several temporal or
 presentation defects, but it still cannot infer artistic intent for every map,
 cutscene overlay, battle effect, or sprite. New routes and isolated layer

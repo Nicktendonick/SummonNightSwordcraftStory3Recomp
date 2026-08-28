@@ -8,6 +8,7 @@
 
 #include "gba_ppu.h"
 #include "runtime.h"
+#include "runtime_arm.h"
 #include "swordcraft3_true_map.h"
 
 namespace {
@@ -17,10 +18,54 @@ constexpr std::uint16_t kFixed16x9Width = 284;
 constexpr std::size_t kDispcntOffset = 0x00;
 constexpr std::size_t kBgcntOffset = 0x08;
 
+// sub_08009840 builds the game's OAM buffer. These are its horizontal object
+// culling constants: CMP X,#239 on the right and MOV #64 / NEG on the left.
+// The recompiler config opts only these exact instructions into the shared
+// immediate-override seam. Both the stock Japanese ROM and English beta retain
+// the same instructions at these addresses.
+constexpr std::uint32_t kObjRightCullLimitPc = 0x08009B9Eu;
+constexpr std::uint32_t kObjLeftCullDistancePc = 0x08009BB4u;
+constexpr std::uint32_t kNativeObjRightCullLimit = 239u;
+constexpr std::uint32_t kNativeObjLeftCullDistance = 64u;
+
 unsigned s_mirrored_bg_mask = 0;
 unsigned s_wrap_ok_bg_mask = 0;
 unsigned s_true_map_bg_mask = 0;
 unsigned s_extra_left = 0;
+unsigned s_extra_right = 0;
+bool s_expand_overworld_objects = false;
+
+constexpr std::uint32_t widened_obj_cull_immediate(
+        std::uint32_t instruction_pc, std::uint32_t original_value,
+        std::uint32_t extra_left, std::uint32_t extra_right) {
+    if (instruction_pc == kObjRightCullLimitPc &&
+        original_value == kNativeObjRightCullLimit) {
+        return kNativeObjRightCullLimit + extra_right;
+    }
+    if (instruction_pc == kObjLeftCullDistancePc &&
+        original_value == kNativeObjLeftCullDistance) {
+        return kNativeObjLeftCullDistance + extra_left;
+    }
+    return original_value;
+}
+
+static_assert(widened_obj_cull_immediate(
+    kObjRightCullLimitPc, 239u, 22u, 22u) == 261u);
+static_assert(widened_obj_cull_immediate(
+    kObjLeftCullDistancePc, 64u, 22u, 22u) == 86u);
+static_assert(widened_obj_cull_immediate(
+    0x08009BD8u, 159u, 22u, 22u) == 159u);
+
+int swordcraft3_overworld_alu_immediate(
+        std::uint32_t instruction_pc, std::uint32_t original_value,
+        std::uint32_t* out_value) {
+    if (!s_expand_overworld_objects || !out_value) return 0;
+    const std::uint32_t widened = widened_obj_cull_immediate(
+        instruction_pc, original_value, s_extra_left, s_extra_right);
+    if (widened == original_value) return 0;
+    *out_value = widened;
+    return 1;
+}
 
 std::uint64_t audit_env_u64(const char* name, std::uint64_t fallback) {
     const char* value = std::getenv(name);
@@ -131,6 +176,8 @@ void use_native_margin_policy() {
     s_wrap_ok_bg_mask = 0;
     s_true_map_bg_mask = 0;
     s_extra_left = 0;
+    s_extra_right = 0;
+    s_expand_overworld_objects = false;
     gba::g_ws_tilemap_provider = nullptr;
     gba::g_ws_bg_x_provider = nullptr;
     gba::g_ws_bg_x_provider_layers = 0;
@@ -139,6 +186,7 @@ void use_native_margin_policy() {
     gba::g_ws_pillarbox_left = 0;
     gba::g_ws_pillarbox_right = 0;
     gba::g_ws_obj_native_clip = 0;
+    gba::g_ws_margin_occlusion_layers = 0;
 }
 
 void initialize_extended_view(std::uint32_t, std::uint32_t) {
@@ -148,6 +196,13 @@ void initialize_extended_view(std::uint32_t, std::uint32_t) {
     s_wrap_ok_bg_mask = 0;
     s_true_map_bg_mask = 0;
     s_extra_left = 0;
+    s_extra_right = 0;
+    s_expand_overworld_objects = false;
+    // This callback is inert unless update_extended_view has positively
+    // identified a true-map overworld. Generated code consults it only at the
+    // two exact game-owned culling instructions declared in the config.
+    g_runtime_thumb_alu_imm_override =
+        swordcraft3_overworld_alu_immediate;
     gba::g_ws_tilemap_provider = swordcraft3_margin_tilemap;
     gba::g_ws_bg_x_provider = swordcraft3_margin_x;
     gba::g_ws_bg_x_provider_layers = 0;
@@ -158,6 +213,7 @@ void initialize_extended_view(std::uint32_t, std::uint32_t) {
     // Sprites the guest parked just off the native edge must never surface
     // in the margins (harmless at native width; the wide path checks it).
     gba::g_ws_obj_native_clip = 1;
+    gba::g_ws_margin_occlusion_layers = 0;
 }
 
 void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
@@ -272,6 +328,8 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     s_wrap_ok_bg_mask = wrap_ok_layers;
     s_true_map_bg_mask = true_map_layers;
     s_extra_left = frame->extra_left;
+    s_extra_right = frame->extra_right;
+    s_expand_overworld_objects = field_scene && true_map_layers != 0;
     gba::g_ws_tilemap_provider = swordcraft3_margin_tilemap;
     gba::g_ws_bg_x_provider = swordcraft3_margin_x;
     gba::g_ws_bg_x_provider_layers = mirrored_layers;
@@ -279,7 +337,16 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     gba::g_ws_pillarbox = margin_layers ? 0 : 1;
     gba::g_ws_pillarbox_left = 0;
     gba::g_ws_pillarbox_right = 0;
-    gba::g_ws_obj_native_clip = 1;
+    // Authenticated overworld source maps may show the objects that the widened
+    // guest OAM builder now authors. Every other scene keeps the conservative
+    // native-width clip, including battles that share this renderer.
+    gba::g_ws_obj_native_clip = s_expand_overworld_objects ? 0 : 1;
+    // In true-map fields, transparent/absent pixels from the world layers are
+    // deliberate black room/transition boundaries. Ask the shared compositor
+    // to keep those boundaries above UI portraits and OBJ without treating BG0
+    // screen-space artwork as world coverage.
+    gba::g_ws_margin_occlusion_layers =
+        s_expand_overworld_objects ? true_map_layers : 0;
 
     // The runtime publishes this snapshot at the completed-frame boundary.
     // The selected policy governs the framebuffer rendered next, whose dump
@@ -315,7 +382,8 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
             "\"margin_layers\":%u,\"mirrored_layers\":%u,"
             "\"true_map_layers\":%u,\"wrapped_layers\":%u,"
             "\"pillarbox\":%s,"
-            "\"obj_native_clip\":true,"
+            "\"obj_native_clip\":%s,\"overworld_objects_expanded\":%s,"
+            "\"margin_occlusion_layers\":%u,"
             "\"bgcnt\":[%u,%u,%u,%u],\"hofs\":[%u,%u,%u,%u],"
             "\"vofs\":[%u,%u,%u,%u],"
             "\"winin\":%u,\"winout\":%u}\n",
@@ -326,6 +394,9 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
             visible_layers, margin_layers, mirrored_layers, true_map_layers,
             wrap_ok_layers,
             margin_layers ? "false" : "true",
+            gba::g_ws_obj_native_clip ? "true" : "false",
+            s_expand_overworld_objects ? "true" : "false",
+            gba::g_ws_margin_occlusion_layers,
             bgcnt[0], bgcnt[1], bgcnt[2], bgcnt[3],
             hofs[0], hofs[1], hofs[2], hofs[3],
             vofs[0], vofs[1], vofs[2], vofs[3],

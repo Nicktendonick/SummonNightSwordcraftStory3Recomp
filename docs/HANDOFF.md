@@ -131,12 +131,42 @@ change one pixel late. The game adapter now aligns the descriptor's full map
 page to `BGxHOFS`/`BGxVOFS`. A 30-sample recorded-motion replay preserved every
 native-center pixel and produced no strong native-boundary seams.
 
+The next overworld pass found that missing margin objects were not a renderer
+placement bug: `sub_08009840` discarded sprites outside X=-63..239 before OAM
+was copied. The game config now opts its two horizontal culling immediates at
+`0x08009B9E` and `0x08009BB4` into gbarecomp's exact-PC enhancement seam. The
+game adapter widens those limits by the active left/right view margins only
+when a true-map field scene is identified, and releases the renderer's native
+OBJ clip for that scene. Battles, menus, unsupported field layouts, vertical
+culling, native-width play, and guest memory outside the normal OAM builder
+remain unchanged.
+
+A later owner capture at frame 33,123 placed the player in the same overworld
+as an old woman near the right edge. A deterministic replay walked past that
+NPC and into the neighboring transition over frames 33,125..34,045. The old
+woman remains visible while real true-map scenery exists in the added margin.
+Transparent world pixels at the map/transition edge now form a final black
+foreground mask above widened OBJ and screen-space portrait layers, so neither
+can walk across deliberate black boundaries. The game enables this only for
+its validated true-map BG1..BG3 set. The reusable, default-off compositor seam
+is `g_ws_margin_occlusion_layers` on gbarecomp's
+`feature/swordcraft3-upstream-v2-20260820` branch.
+
+The focused PPU test covers an OBJ and a BG0 portrait-like layer over adjacent
+transparent/opaque world pixels, verifies the black boundary wins only over
+the transparent pixel, and keeps OBJ-only debugger output raw. The 93-sample
+owner-route replay had matching Native/Wide guest state and no capture
+integrity failure. Its retained blank-margin findings describe the requested
+physical transition boundary; that new route has not been added to the older
+release contract's exact-frame allowlist.
+
 ## Known limitations and review targets
 
 - Widescreen remains experimental. Free exploration, map transitions, later
   battles, menus, and display-mode effects need broader manual coverage.
 - Battle widening reflects presentation layers; it does not expand simulation
-  or camera geometry. Sprites, collision, and HUD coordinates remain native.
+  or camera geometry. Battle sprites, collision, and HUD coordinates remain
+  native. Only validated true-map overworld scenes widen horizontal OBJ culling.
 - ROM patches that change executable code need a matching static corpus. The
   beta therefore has its own executable instead of using the stock corpus.
 - Some English-beta battle-state headless checks still bridge dynamic IWRAM

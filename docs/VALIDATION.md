@@ -365,3 +365,33 @@ states with BG1/BG2/BG3 isolation, and replayed 30 aligned Native/Wide samples
 over 120 recorded movement frames. All 30 native centers matched exactly;
 there were no strong old-boundary seam samples or unexpected black margins.
 The widescreen audit's 10 focused unit tests also passed.
+
+## Overworld objects and foreground transition boundaries (2026-08-27)
+
+The owner capture at guest frame 33,123 contains the player and an old woman at
+the right edge of a widened field. The game's OAM builder originally rejected
+objects beyond X=239 and X=-64; the game config now opts those two exact
+immediates into the reusable runtime override and widens them only for a
+validated true-map overworld. A 29-sample preliminary motion replay and the
+later 93-sample NPC-to-transition replay kept Native/Wide guest state aligned.
+Battle control telemetry retained native OBJ clipping and did not enable the
+overworld object policy.
+
+The same route confirms that a finite transition boundary may be transparent
+inside the allocated source tilemap rather than outside its numeric bounds.
+The shared wide compositor therefore exposes a default-off
+`g_ws_margin_occlusion_layers` policy: opaque pixels emitted by the selected
+world BGs define valid margin coverage, and uncovered margin pixels remain
+black after OBJ and UI composition. Swordcraft selects its current true-map
+BG1..BG3 set, never BG0 portrait/UI art, and only in that overworld policy.
+OBJ-only diagnostic captures bypass the final mask so authored widened OAM
+remains inspectable.
+
+`ppu_smoke_tests` verifies both an OBJ and a portrait-like BG0 are hidden over
+an uncovered world pixel, remain visible over the adjacent opaque world pixel,
+and that the feature is inert by default and in native rendering. The rebuilt
+English-beta executable replayed frames 33,125..34,045 with 93 samples, zero
+capture-integrity failures, matching Native/Wide guest state, and the old woman
+visible in valid widened scenery. Eleven retained `authored_margin_blank`
+findings and one seam heuristic are the requested black right-side transition
+edge; this diagnostic route is not part of the older exact-frame contract.
