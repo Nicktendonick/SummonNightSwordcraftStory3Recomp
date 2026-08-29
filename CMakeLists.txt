@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(SummonNightSwordcraftStory3Recomp C CXX)
 
+include(CTest)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,6 +37,7 @@ file(GLOB SWORDCRAFT3_GENERATED_SOURCES CONFIGURE_DEPENDS
 add_executable(SummonNightSwordcraftStory3Recomp
     src/main.cpp
     src/adaptive_widescreen.cpp
+    src/swordcraft3_true_map.cpp
     ${SWORDCRAFT3_GENERATED_SOURCES})
 
 target_include_directories(SummonNightSwordcraftStory3Recomp PRIVATE
@@ -87,6 +90,16 @@ if(SWORDCRAFT3_RECOMP_UI)
 endif()
 
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
+
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME swordcraft3_widescreen_route_audit_unit
+            COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+                -p "test_audit_widescreen_route.py" -v)
+    endif()
+endif()
 
 if(MSVC)
     target_link_options(SummonNightSwordcraftStory3Recomp PRIVATE /STACK:16777216)
@@ -169,7 +182,8 @@ if(SWORDCRAFT3_BETA_BPS)
                 "${SWORDCRAFT3_BETA_DIR}/recompiled.h")
 
     add_executable(SummonNightSwordcraftStory3RecompBeta
-        src/main.cpp src/adaptive_widescreen.cpp ${SWORDCRAFT3_BETA_SOURCES})
+        src/main.cpp src/adaptive_widescreen.cpp src/swordcraft3_true_map.cpp
+        ${SWORDCRAFT3_BETA_SOURCES})
     target_include_directories(SummonNightSwordcraftStory3RecompBeta PRIVATE
         "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba"
         "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug"

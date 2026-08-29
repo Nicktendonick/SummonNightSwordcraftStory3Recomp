@@ -1,0 +1,60 @@
+{
+  "schema": "swordcraft3-widescreen-capability-v1",
+  "route": "English beta field/battle route 02",
+  "frame_range": { "start": 10060, "end": 11060, "step": 20 },
+  "required_policies": ["field_true_map"],
+  "require_native_wide_guest_state_match": true,
+  "allowed_findings": [
+    {
+      "kind": "authored_margin_blank",
+      "frame": 10060,
+      "side": "left",
+      "reason": "The route is at the physical map/transition boundary; no world tiles exist beyond it."
+    },
+    {
+      "kind": "authored_margin_blank",
+      "frame": 10080,
+      "side": "left",
+      "reason": "The route is at the physical map/transition boundary; no world tiles exist beyond it."
+    },
+    {
+      "kind": "authored_margin_blank",
+      "frame": 10140,
+      "side": "left",
+      "reason": "The route is at the physical map/transition boundary; no world tiles exist beyond it."
+    },
+    {
+      "kind": "authored_margin_blank",
+      "frame": 10200,
+      "side": "left",
+      "reason": "The route is at the physical map/transition boundary; no world tiles exist beyond it."
+    },
+    {
+      "kind": "authored_margin_blank",
+      "frame": 10260,
+      "side": "left",
+      "reason": "The route is at the physical map/transition boundary; no world tiles exist beyond it."
+    },
+    {
+      "kind": "native_boundary_seam",
+      "frame": 10120,
+      "side": "left",
+      "reason": "This is the deliberate hard boundary between the finite field map and black transition space."
+    },
+    {
+      "kind": "native_boundary_seam",
+      "frame": 10060,
+      "side": "right",
+      "reason": "Native-width dialogue chrome ends at this boundary while the field layer correctly continues behind it."
+    }
+  ],
+  "maximum_findings_by_detector": {
+    "authored_margin_blank": 0,
+    "native_boundary_seam": 0
+  },
+  "notes": [
+    "Intentional black at a physical transition boundary is allowlisted by exact frame and side.",
+    "This contract is deliberately route-scoped; it is not a whole-game widescreen claim.",
+    "Expand it only after deterministic captures cover additional scene families."
+  ]
+}

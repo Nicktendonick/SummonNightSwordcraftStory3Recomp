@@ -90,21 +90,30 @@ treatment: their 256-pixel ring buffers hold at most 16 valid columns beyond
 the 240-pixel viewport, so keeping the wrapped entries showed the opposite
 map seam and stale streamer columns as repeated or garbled margin tiles.
 Real field continuation is planned via a map-data sidecar that reads the
-guest's own map layout. Battles are better: the arena art rides a fully drawn
-512-pixel-wide BG1 map, so battle margins continue with real authored arena
-scenery, gated by the game's own window registers; rows beside the
-native-width HUD panels show the arena backdrop. Native HUD and dialogue chrome
-remain centered, and sprites the game parks just off the native edge are
-clipped so they never surface in the margins. Affine, bitmap, forced-blank,
-menu, and otherwise unsupported layouts fall back to clean pillarboxing
-rather than repeating unrelated tiles. The original center image remains
-pixel-identical in every mode.
+guest's own map layout. Battle BG1 and BG2 also use reflected nearest-edge
+scenery: route-scale layer isolation proved that the nominally 512-pixel BG1
+still exposes undrawn columns as the arena camera moves. Native HUD and
+dialogue chrome remain centered, and sprites the game parks just off the native
+edge are clipped so they never surface in the margins. Affine, bitmap,
+forced-blank, menu, and otherwise unsupported layouts fall back to clean
+pillarboxing rather than repeating unrelated tiles. The original center image
+remains pixel-identical in every mode.
 
 The deterministic title/new-game route has been checked at frames 1,200,
-1,800, 3,000, and 4,400 with no static-dispatch misses. English-beta save-state
-captures now also cover a field dialogue and the first battle at Native,
-Adaptive, and 16:9. Broader exploration, transitions, later battles, and display
-effects still need review, so the launcher marks this feature **Experimental**.
+1,800, 3,000, and 4,400 with no static-dispatch misses. A recorded English-beta
+route now covers a complete first battle, its display-mode effects, the
+post-battle cutscene, and later field/dialogue scenes in aligned Native and
+16:9 runs. That route still crosses three dynamic beta coverage gaps, so it is
+diagnostic evidence rather than release acceptance. Later battles and broader
+exploration still need review; the launcher keeps this feature **Experimental**.
+
+The repository now includes a deterministic route-scale auditor rather than
+relying only on hand-picked screenshots. It replays the same input in Native
+and Wide modes, verifies the entire 240x160 center pixel-for-pixel, records the
+scene policy selected on every sampled frame, and ranks persistent seams,
+pillarbox leaks, blank/frozen authored margins, and optional OBJ-isolation
+leaks. Raw captures remain ignored and can be reanalyzed without replaying the
+game. See [docs/WIDESCREEN_AUDIT.md](docs/WIDESCREEN_AUDIT.md).
 
 ## ROM patches and translations
 
