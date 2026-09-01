@@ -100,6 +100,42 @@ class WidescreenRouteAuditTests(unittest.TestCase):
         self.assertEqual(findings, [])
         self.assertEqual(safe[0]["kind"], "authored_black_backdrop")
 
+    def test_battle_hybrid_receives_authored_margin_checks(self):
+        self.assertIn("battle_hybrid", AUDIT.AUTHORED_POLICIES)
+        pixels = image(284)
+        for y in range(160):
+            for x in range(22, 262):
+                set_pixel(pixels, 284, x, y, b"\xFF\xFF\xFF")
+        telemetry = {24: state(24, "battle_hybrid")}
+        findings, safe = AUDIT.analyze_policy_and_margins(
+            {24: (284, 160, bytes(pixels), Path("wide.png"))}, telemetry)
+        self.assertEqual(findings[0]["kind"], "authored_margin_blank")
+        self.assertEqual(safe, [])
+
+    def test_battle_loop_receives_authored_margin_checks(self):
+        self.assertIn("battle_loop", AUDIT.AUTHORED_POLICIES)
+        pixels = image(284)
+        for y in range(160):
+            for x in range(22, 262):
+                set_pixel(pixels, 284, x, y, b"\xFF\xFF\xFF")
+        telemetry = {24: state(24, "battle_loop")}
+        findings, safe = AUDIT.analyze_policy_and_margins(
+            {24: (284, 160, bytes(pixels), Path("wide.png"))}, telemetry)
+        self.assertEqual(findings[0]["kind"], "authored_margin_blank")
+        self.assertEqual(safe, [])
+
+    def test_battle_natural_receives_authored_margin_checks(self):
+        self.assertIn("battle_natural", AUDIT.AUTHORED_POLICIES)
+        pixels = image(284)
+        for y in range(160):
+            for x in range(22, 262):
+                set_pixel(pixels, 284, x, y, b"\xFF\xFF\xFF")
+        telemetry = {24: state(24, "battle_natural")}
+        findings, safe = AUDIT.analyze_policy_and_margins(
+            {24: (284, 160, bytes(pixels), Path("wide.png"))}, telemetry)
+        self.assertEqual(findings[0]["kind"], "authored_margin_blank")
+        self.assertEqual(safe, [])
+
     def test_seam_requires_neighboring_samples(self):
         frames = {}
         telemetry = {}

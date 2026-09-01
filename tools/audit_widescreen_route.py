@@ -33,10 +33,14 @@ LAYER_MASKS = {
     "obj": 0x10,
 }
 # `battle_authored` is retained for re-analysis of preserved captures made
-# before the route audit disproved the authored-BG1 assumption and renamed the
-# live policy to `battle_reflect`.
+# before the route audit disproved the all-authored-BG1 assumption. The hybrid
+# policy uses authored map columns where available and reflects only terminal
+# padding. `battle_natural` samples that finite span in world order without
+# hardware wrapping; `battle_loop` retains the prior repeated presentation.
+# All still require authored-policy seam and temporal checks.
 AUTHORED_POLICIES = {
-    "field_true_map", "field_reflect", "battle_reflect", "battle_authored"
+    "field_true_map", "field_reflect", "battle_reflect", "battle_authored",
+    "battle_hybrid", "battle_loop", "battle_natural"
 }
 
 
@@ -44,6 +48,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", required=True, type=Path)
     parser.add_argument("--rom", required=True, type=Path)
+    parser.add_argument(
+        "--rom-sha1",
+        help="override the runtime ROM identity (for a prepared translation ROM)")
     parser.add_argument("--bios", required=True, type=Path)
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
@@ -311,6 +318,8 @@ def capture_run(args: argparse.Namespace, output_dir: Path, mode: str,
         "--save", str((layer_dir / "audit-save.eep").resolve()),
         "--bios", str(args.bios.resolve()), "--rom", str(args.rom.resolve()),
     ]
+    if args.rom_sha1:
+        command += ["--rom-sha1", args.rom_sha1]
     if args.load_state:
         command += ["--load-state", str(args.load_state.resolve())]
     command.append(str(args.config.resolve()))

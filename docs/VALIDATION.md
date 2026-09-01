@@ -62,6 +62,7 @@ the canonical `new_game_select_male.trace` replay:
 | Check | Result |
 |---|---|
 | Fixed wide surface | 284x160 (16:9), 22 added pixels per side |
+| Maximum fixed/adaptive surface | 320x160 (2:1), 40 added pixels per side |
 | Adaptive sample surface | 262x160, 11 added pixels per side |
 | Route checkpoints | Frames 1,200, 1,800, 3,000, and 4,400 rendered cleanly |
 | Static execution | `FULLY_STATIC`; 0 dispatch misses and 0 interpreted instructions |
@@ -75,8 +76,8 @@ continues from the game's complete source tilemaps retained behind the live
 scrolling rings. The battle arena uses a game-specific reflected-edge
 continuation because its 256-pixel ring leaves adjacent columns empty; its HUD
 stays centered. Unsupported layouts fail closed to clean margin
-pillarboxing. The launcher exposes Native, fixed 16:9, and window-driven
-Adaptive modes, with Adaptive capped at 16:9.
+pillarboxing. The launcher exposes Native, fixed 16:9, fixed 2:1, and
+window-driven Adaptive modes, with Adaptive capped at 2:1.
 
 English-beta save slots were also captured from the post-battle field dialogue
 and the first active battle at 240x160, 262x160, and 284x160. Both widened modes
@@ -395,3 +396,134 @@ capture-integrity failures, matching Native/Wide guest state, and the old woman
 visible in valid widened scenery. Eleven retained `authored_margin_blank`
 findings and one seam heuristic are the requested black right-side transition
 edge; this diagnostic route is not part of the older exact-frame contract.
+
+## Battle object expansion (2026-08-29)
+
+Recognized Mode 0 battle arenas now opt the same two reviewed horizontal OAM
+builder limits into the active view (up to 320 pixels) and release the renderer's
+native OBJ clip. This applies only while the existing battle signature is
+active. HUD-only layouts, menus, affine/bitmap combat effects, and unrecognized
+display modes retain the conservative native clip and pillarbox behavior.
+
+The English-beta executable rebuilt successfully. A 2,940-frame first-battle
+replay covered normal combat, camera motion, damage numbers, particles, and the
+temporary Mode 1 effect transitions. The normal arena reported
+`battle_objects_expanded=true`; unsupported effect modes remained centered.
+The focused frame-4,980 battle state and a left-movement replay also completed
+without a crash or capture-integrity failure.
+
+Unlike the previous background-only battle policy, widened battle rendering
+can author additional entries in the game's IWRAM OAM staging buffer. Native
+and Wide state traces therefore intentionally differ in IWRAM/OAM while this
+policy is active; this is a presentation-side difference, but it means the
+existing whole-state equality detector is not a release oracle for this mode.
+Manual play is still required to confirm useful enemy/effect visibility at both
+camera edges and to rule out battle-specific parked sprites in later arenas.
+
+## Full battle layer stack and 2:1 view (2026-08-29, superseded fill policy)
+
+The launcher now offers a fixed 320x160 (2:1) surface and allows Adaptive to
+grow to that width. Battle BG1/BG2 are scanned from the read-only frame VRAM
+snapshot: authentic map columns are used while the scroll lies inside the
+authored prefix, and repeated terminal fill falls back to nearest-edge
+reflection. In the recorded first arena this identified a 384-pixel BG1 prefix
+and a 128-pixel BG2 prefix.
+
+BG0 contains both the near forest/ground art and the screen-space HUD. It is
+therefore reflected only for output rows 59..111, the normal battle playfield;
+the top and bottom margin rows leave BG0 transparent so the centered HUD is not
+duplicated. This fixed the user-observed result where only the distant layer
+appeared beyond the native GBA viewport.
+
+An eight-sample focused state at frames 4,984..5,012 produced no retained seam
+finding after the complete layer stack was enabled. A 148-sample replay across
+frames 6,700..9,640 covered the full fight at 320x160 with no blank-margin or
+temporal-freeze finding; temporary unsupported display modes remained centered.
+The remaining composite boundary heuristics align with the intentionally
+centered HUD frame. Native/Wide guest-state equality is not expected while the
+widened guest OAM builder authors additional staging entries.
+
+## Authored-span battle scenery loops (2026-08-30, superseded default)
+
+The reflected margin fill above was retained as a fallback, but the default
+normal-battle policy now repeats each scrolling plane only after its complete
+usable scenery span. This produces periodic continuation tied to each layer's
+own `BGxHOFS`, so parallax remains independent and neither side is a geometric
+mirror. The first-arena snapshot measured BG1 at 384 pixels and BG2 at 128
+pixels. BG0's nominal non-identical allocation measured 480 pixels, but a full
+512-pixel render exposed a partial duplicate followed by transparent/corrupt
+padding. Its verified complete visual period is therefore 240 pixels.
+
+BG0 is active arena art only while the game's VCOUNT schedule installs
+`BG0CNT=0x470B` on scanlines 18..123. Margin continuation is limited to that
+band, leaving the shared top/bottom HUD rows transparent outside the centered
+native viewport. The previous playfield-only reflected/hybrid policy can be
+restored without reverting code by setting
+`SWORDCRAFT3_BATTLE_MARGIN_MODE=reflect`; the project root includes
+`Launch Beta - Reflected Battle Margins.bat` as a one-click version of that
+setting.
+
+The first 480-pixel attempt produced a persistent left native-boundary seam in
+all eight focused samples because its terminal BG0 region was visually empty.
+After selecting the 240-pixel visual period, frames 4,984..5,012 at 320x160 had
+no blank-margin, seam, or freeze finding. A 148-sample replay over frames
+6,700..9,640 then covered 2,940 frames of the complete first fight, including
+movement, attacks, victory, and two temporary unsupported display modes. It
+reported no blank margin, temporal freeze, or native-boundary seam; unsupported
+modes at frames 8,140 and 9,060 remained safely centered. The retained
+Native/Wide state difference is expected from the already documented widened
+OAM builder. The reflected fallback also completed a saved-state sample and
+reported `policy=battle_hybrid`, `looped_layers=0`.
+
+## Standard 384-pixel full-arena view (2026-08-30)
+
+Static review of `gUnk_08B801CC` found seventeen standard battle-configuration
+records. Every 28-byte record declares `0x0180` (384 pixels) at offset `+4`,
+which the battle movement/boundary code reads as the logical horizontal arena
+extent. This is distinct from the size or repetition period of any individual
+background plane.
+
+The launcher now offers fixed `12:5 (Full Arena, 384 px)`, and Adaptive may
+grow to the same ceiling. Window shapes wider than 12:5 are still letterboxed,
+so the renderer does not invent space beyond the standard arena width. The
+former 320-pixel ceiling is preserved behind
+`SWORDCRAFT3_ARENA_VIEW=legacy`; the project root's
+`Launch Beta - Previous 2-to-1 Widescreen.bat` applies that setting without
+changing configuration files. The reflected-margin rollback launcher applies
+both the legacy width and the earlier reflected/hybrid margin policy.
+
+The focused frames 4,984..5,012 passed at 384x160 with no blank-margin, seam,
+or temporal-freeze finding. A 148-sample replay over frames 6,700..9,640 then
+covered the full 2,940-frame first fight at 384x160. Normal combat retained both
+fighters and the complete background stack with no blank-margin, seam, freeze,
+or crash finding. Unsupported temporary effect modes at frames 8,140 and 9,060
+remained safely centered. The sole retained Native/Wide state divergence is the
+expected IWRAM/OAM difference from widened guest object culling. The village
+arena and later arenas still require owner play-testing before this becomes the
+default accepted presentation.
+
+## Natural finite battle maps (2026-08-31)
+
+The default battle presentation now follows the same essential rule used by
+the Mario Kart Super Circuit reference: keep the guest camera-to-map projection
+and render additional map coordinates rather than remapping margin pixels back
+into the native viewport. Each normal text layer is sampled in world order only
+within its reviewed finite map span. Crossing the end of that span fails closed
+instead of invoking the GBA tilemap's power-of-two wrap.
+
+The village Slot 5 capture at frames 11,431..11,435 demonstrated the original
+problem: the loop policy produced strong seams at both old native boundaries.
+Its BG0/BG1/BG2 live spans were 240/384/128 pixels under the old periodic rule.
+Sampling the complete 512-pixel BG0 raster allocation and the finite BG1/BG2
+spans naturally removed both seams. A five-frame 384x160 replay reported zero
+findings, retained the pixel-identical 240x160 center, and kept both fighters in
+the expanded view. The earlier forest frame-4,980 state was also inspected with
+the complete BG0 allocation; its right scenery continues naturally and its
+far-left sloped black area is the finite arena boundary rather than a mirror.
+
+`SWORDCRAFT3_BATTLE_MARGIN_MODE=loop` restores the immediately preceding
+periodic presentation, exposed by `Launch Beta - Repeating Battle Margins.bat`.
+The older reflected/hybrid path remains available with
+`SWORDCRAFT3_BATTLE_MARGIN_MODE=reflect` and its existing launcher. These
+fallbacks make owner comparisons reversible without altering other widescreen
+or battle-object work.

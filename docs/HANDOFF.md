@@ -46,13 +46,18 @@ work in `recomp-ui`.
   ROM.
 - A separate English-beta executable generated from the locally supplied BPS
   and verified Japanese ROM.
-- Experimental Native, Adaptive, and fixed 16:9 views. Reviewed field layers
-  use reflected nearest-edge samples because their 256px ring buffers cannot
-  supply true off-screen columns. Battle BG1/BG2 use the same safe reflection:
-  temporal layer isolation disproved the earlier assumption that the nominal
-  512px BG1 always contains authored margin columns. Native HUD and dialogue
-  chrome stay centered, margin sprites are clipped, and unreviewed layouts
-  pillarbox. See the margin-policy revisions in
+- Experimental Native, Adaptive, fixed 16:9, fixed 2:1, and fixed 384x160
+  full-arena views. All seventeen standard battle configurations declare a
+  384-pixel logical width. Reviewed
+  field layers use authenticated source maps where available. Normal battles
+  now sample their finite maps once in natural camera order instead of
+  mirroring or repeating them. The complete 512-pixel BG0 raster map was
+  checked in the forest and village arenas; BG0 is limited to the
+  VCOUNT-selected scanlines 18..123 so its shared HUD rows are not duplicated.
+  Reviewed field/battle object culling widens with the view; unreviewed layouts
+  pillarbox. The previous repeating/reflected policies and 320-pixel ceiling
+  remain available through rollback launchers in the project root. See the
+  margin-policy revisions in
   [VALIDATION.md](VALIDATION.md).
 - A deterministic Native/Wide route auditor with exact center comparison,
   per-frame game-policy telemetry, temporal seam/freeze ranking, reusable
@@ -116,13 +121,19 @@ large generated shards; use one compiler worker on memory-constrained systems.
 
 The rebuilt Windows beta target replayed frames 6,700..17,440 from the first
 battle through its post-battle cutscene and field/dialogue route. Aligned
-Native/Wide centers matched exactly. Frame-by-frame BG isolation exposed and
-then verified the fix for BG1's empty left margin during camera motion; BG1 and
-BG2 now reflect safely. No blank margins, temporal freezes, fail-closed leaks,
-or center mismatches remain in the fixed reports. Six retained seam candidates
-are centered HUD/dialogue/portrait boundaries on visual review. Adaptive
-262x160 and later-game routes still need coverage. Local evidence lives below
-the ignored `validation/adaptive-widescreen` directory.
+Native/Wide centers matched exactly before battle OBJ culling was expanded.
+Frame-by-frame BG isolation exposed and then verified the fixes for empty and
+stale margin columns. A later 320x160 pass through the complete first battle
+uses full-span periodic continuation for all three normal-arena planes. A
+focused replay rejected BG0's nominal 480-pixel allocation because its latter
+half is a partial duplicate followed by transparent/corrupt padding; its
+complete usable period is 240 pixels. With periods 240/384/128, the focused
+seam warning disappeared and the 2,940-frame fight replay reported no blank
+margins, temporal freezes, or native-boundary seams. The same route later
+passed at the table-declared full 384-pixel arena width. Adaptive intermediate
+widths, the village arena, and later-game routes still need owner coverage.
+Local evidence lives below the ignored `validation/adaptive-widescreen`
+directory.
 
 The 2026-08-27 visible-debugger session added a free-overworld regression at
 frames 19,663 and 20,440. It found that the game-owned map descriptor can lag
@@ -164,9 +175,13 @@ release contract's exact-frame allowlist.
 
 - Widescreen remains experimental. Free exploration, map transitions, later
   battles, menus, and display-mode effects need broader manual coverage.
-- Battle widening reflects presentation layers; it does not expand simulation
-  or camera geometry. Battle sprites, collision, and HUD coordinates remain
-  native. Only validated true-map overworld scenes widen horizontal OBJ culling.
+- Battle widening loops each plane at its measured/verified usable visual span,
+  limits BG0 to the active arena raster band, and widens the reviewed horizontal
+  OAM-builder limits for recognized normal arenas. It does not
+  expand collision or camera geometry, and HUD/unsupported effect layouts
+  remain native. Later arenas still need manual edge testing; the additional
+  OAM staging entries also make whole-state Native/Wide hashes differ in IWRAM
+  and OAM while the battle policy is active.
 - ROM patches that change executable code need a matching static corpus. The
   beta therefore has its own executable instead of using the stock corpus.
 - Some English-beta battle-state headless checks still bridge dynamic IWRAM
