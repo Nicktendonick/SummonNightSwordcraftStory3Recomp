@@ -168,11 +168,11 @@ note = "IWRAM palette blend routine"
 
 [[thumb_alu_immediate_override]]
 addr = 0x08009B9E
-note = "Overworld-only right OBJ culling limit for adaptive widescreen"
+note = "Reviewed field/battle right OBJ culling limit for adaptive widescreen"
 
 [[thumb_alu_immediate_override]]
 addr = 0x08009BB4
-note = "Overworld-only left OBJ culling distance for adaptive widescreen"
+note = "Reviewed field/battle left OBJ culling distance for adaptive widescreen"
 
 [[extra_func]]
 addr = 0x08001B40

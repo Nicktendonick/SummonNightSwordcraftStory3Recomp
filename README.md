@@ -78,32 +78,41 @@ in-game saves and are tied to the current ROM and snapshot format.
 
 ## Experimental adaptive widescreen
 
-Open **Display** in the pre-boot launcher and cycle **View mode** between
-**Native**, **16:9**, and **Adaptive**. Native remains the default faithful
-240x160 view. Fixed 16:9 renders a 284x160 game surface. Adaptive follows the
-window's live aspect from native 3:2 up to the same 16:9 limit; wider windows
-retain clean side bars rather than exposing unvalidated map data.
+Open **Display** in the pre-boot launcher and choose **Native**, **16:9**,
+**2:1**, **12:5 (Full Arena)**, or **Adaptive**. Native remains the default
+faithful 240x160 view; fixed 16:9 renders 284x160, fixed 2:1 renders 320x160,
+and the experimental full-arena option renders 384x160. Adaptive follows the
+window's live aspect from native 3:2 up to the same 384-pixel limit.
 
 The game adapter recognizes reviewed Mode 0 field/cutscene and battle layouts.
-Field scenes extend into the added area with a reflected nearest-edge
-treatment: their 256-pixel ring buffers hold at most 16 valid columns beyond
-the 240-pixel viewport, so keeping the wrapped entries showed the opposite
-map seam and stale streamer columns as repeated or garbled margin tiles.
-Real field continuation is planned via a map-data sidecar that reads the
-guest's own map layout. Battle BG1 and BG2 also use reflected nearest-edge
-scenery: route-scale layer isolation proved that the nominally 512-pixel BG1
-still exposes undrawn columns as the arena camera moves. Native HUD and
-dialogue chrome remain centered, and sprites the game parks just off the native
-edge are clipped so they never surface in the margins. Affine, bitmap,
-forced-blank, menu, and otherwise unsupported layouts fall back to clean
-pillarboxing rather than repeating unrelated tiles. The original center image
-remains pixel-identical in every mode.
+Field scenes use the guest's retained complete map data where it can be
+authenticated and fall back to reflected nearest-edge samples otherwise;
+their 256-pixel live ring buffers alone cannot safely supply a wide view. In
+normal battles, the adapter samples each finite background map in the game's
+natural camera order and stops at real map boundaries instead of mirroring or
+looping the native viewport. The complete 512-pixel BG0 raster map was checked
+in both the forest and village arenas; BG1/BG2 retain their independently
+measured usable spans. BG0 shares near
+arena art with the top and bottom HUD, so only its VCOUNT-selected combat band
+(scanlines 18..123) extends; interface panels are not repeated. Reviewed field
+and battle object culling expands with the view so useful sprites can enter the
+margins. Affine, bitmap, forced-blank, menu, and otherwise unsupported layouts
+fall back to clean pillarboxing rather than repeating unrelated tiles. The
+original center image remains pixel-identical in every mode. To compare or
+restore a previous battle-margin experiment, run
+`Launch Beta - Repeating Battle Margins.bat` or
+`Launch Beta - Reflected Battle Margins.bat` from the project folder.
+All seventeen entries in the standard battle configuration table declare a
+384-pixel logical arena. Run `Launch Beta - Previous 2-to-1 Widescreen.bat` to
+restore the former 320-pixel ceiling while the full-arena view is evaluated.
 
 The deterministic title/new-game route has been checked at frames 1,200,
 1,800, 3,000, and 4,400 with no static-dispatch misses. A recorded English-beta
 route now covers a complete first battle, its display-mode effects, the
 post-battle cutscene, and later field/dialogue scenes in aligned Native and
-16:9 runs. That route still crosses three dynamic beta coverage gaps, so it is
+wide runs. Separate 320x160 and 384x160 passes cover the complete first battle.
+That route
+still crosses dynamic beta coverage gaps, so it is
 diagnostic evidence rather than release acceptance. Later battles and broader
 exploration still need review; the launcher keeps this feature **Experimental**.
 
