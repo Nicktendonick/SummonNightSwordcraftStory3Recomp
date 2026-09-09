@@ -34,6 +34,13 @@ file(GLOB SWORDCRAFT3_GENERATED_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/generated/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/generated/*.cpp")
 
+# Game-owned presentation/settings, using the existing generic runtime UI seam.
+add_library(swordcraft3_presentation STATIC
+    src/battle_hud_borders.cpp src/swordcraft3_display_settings.cpp)
+target_include_directories(swordcraft3_presentation PUBLIC
+    src "${GBARECOMP_ROOT}/src/runtime"
+    PRIVATE "${RECOMP_UI_ROOT}/src")
+
 add_executable(SummonNightSwordcraftStory3Recomp
     src/main.cpp
     src/adaptive_widescreen.cpp
@@ -48,6 +55,7 @@ target_include_directories(SummonNightSwordcraftStory3Recomp PRIVATE
     src)
 
 target_link_libraries(SummonNightSwordcraftStory3Recomp PRIVATE
+    swordcraft3_presentation
     "-Wl,--start-group"
     gbarecomp_runtime
     gbarecomp_debug
@@ -92,6 +100,10 @@ endif()
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
 
 if(BUILD_TESTING)
+    add_executable(swordcraft3_presentation_tests tests/test_battle_hud_borders.cpp)
+    target_link_libraries(swordcraft3_presentation_tests PRIVATE swordcraft3_presentation)
+    target_include_directories(swordcraft3_presentation_tests PRIVATE "${RECOMP_UI_ROOT}/src")
+    add_test(NAME swordcraft3_presentation_tests COMMAND swordcraft3_presentation_tests)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_test(NAME swordcraft3_widescreen_route_audit_unit
@@ -189,6 +201,7 @@ if(SWORDCRAFT3_BETA_BPS)
         "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug"
         "${SWORDCRAFT3_BETA_DIR}" src)
     target_link_libraries(SummonNightSwordcraftStory3RecompBeta PRIVATE
+        swordcraft3_presentation
         "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
         gbarecomp_armv4t "-Wl,--end-group")
     target_compile_definitions(SummonNightSwordcraftStory3RecompBeta PRIVATE

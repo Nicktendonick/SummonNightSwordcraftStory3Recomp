@@ -1,4 +1,7 @@
 #include "adaptive_widescreen.h"
+#include "battle_hud_borders.h"
+#include "battle_layer_policy.h"
+#include "swordcraft3_display_settings.h"
 
 #include <array>
 #include <cstddef>
@@ -18,12 +21,12 @@ constexpr std::uint32_t kNativeWidth = 240;
 constexpr std::uint16_t kFixed16x9Width = 284;
 constexpr std::uint16_t kWide2To1Width = 320;
 constexpr std::uint16_t kWholeArenaWidth = 384;
-// The first battle's VCOUNT program switches BG0 to the near-arena map for
-// scanlines 18..123, then restores the screen-space HUD map. Only that raster
+// The battle's VCOUNT program switches BG0 at 18/124; the writes take effect
+// on completed rows 19..124. Only that raster
 // band may be continued into the margins. The legacy reflected fallback keeps
 // its narrower, previously validated crop so it remains an exact escape hatch.
-constexpr int kBattleRasterTop = 18;
-constexpr int kBattleRasterBottom = 124;
+constexpr int kBattleRasterTop = swordcraft3::kBattleHudTopEnd;
+constexpr int kBattleRasterBottom = swordcraft3::kBattleHudBottomStart;
 constexpr int kBattleReflectedPlayfieldTop = 59;
 constexpr int kBattleReflectedPlayfieldBottom = 112;
 constexpr std::uint16_t kBattleRasterBg0Cnt = 0x470Bu;
@@ -72,6 +75,17 @@ unsigned s_extra_left = 0;
 unsigned s_extra_right = 0;
 bool s_expand_overworld_objects = false;
 bool s_expand_battle_objects = false;
+bool s_battle_scenery = false;
+bool s_battle_hud_candidate = false;
+unsigned s_battle_backdrop_period = 0;
+std::array<unsigned,2> s_battle_layer_span{};
+unsigned s_battle_span_valid = 0;
+
+bool battle_layer_fix_enabled() {
+    const char* legacy = std::getenv("SWORDCRAFT3_LEGACY_BATTLE_LAYERS");
+    return !legacy || std::strcmp(legacy, "1") != 0;
+}
+std::uint64_t s_presentation_frame = 0;
 
 enum class BattleMarginMode {
     Natural,
@@ -213,6 +227,60 @@ unsigned battle_authored_width(const gbarecomp::ExtendedViewFrameInfo* frame,
     return trailing_fill_columns >= 2u ? fill_start * 8u : width_tiles * 8u;
 }
 
+unsigned battle_backdrop_period(const gbarecomp::ExtendedViewFrameInfo& frame,
+                                std::uint16_t cnt, unsigned span) {
+    const unsigned columns = span/8u;
+    if (!columns || columns > 64) return span;
+    const unsigned height = (cnt & 0x8000u) ? 64u : 32u;
+    const unsigned block_cols = (cnt & 0x4000u) ? 2u : 1u;
+    const unsigned base = ((cnt >> 8) & 31u) * 0x800u;
+    std::array<std::uint64_t,64> hashes{};
+    for (unsigned x=0; x<columns; ++x) {
+        auto hash = std::uint64_t{14695981039346656037ull};
+        for (unsigned y=0; y<height; ++y) {
+            const unsigned offset = base + ((x/32)+(y/32)*block_cols)*0x800u +
+                ((y%32)*32+(x%32))*2u;
+            hash = (hash ^ read16(frame.vram,frame.vram_size,offset))*1099511628211ull;
+        }
+        hashes[x] = hash;
+    }
+    const unsigned period = swordcraft3::battle_repeat_columns(hashes.data(),columns);
+    // Hashes shortlist candidates; exact entries prove the repeat.
+    for (unsigned x=period; x<columns; ++x)
+        if (!battle_map_columns_equal(&frame,cnt,height,x,x%period)) return span;
+    return period*8u;
+}
+
+int swordcraft3_battle_margin(const gba::WsBgMarginContext* context, int* out_x) {
+    if (!context || !out_x || !s_battle_scenery ||
+        (s_natural_battle_bg_mask & (1u << context->layer)) == 0 ||
+        (context->layer != 1 && context->layer != 2)) return 0;
+    const auto& c = *context;
+    if (c.screen_y < 19 || c.screen_y >= 125) return -1;
+    const int x = static_cast<int>(c.output_x) - static_cast<int>(c.native_left);
+    const unsigned hofs = read16(c.io, 0x400, 0x10 + c.layer*4) & 511u;
+    gbarecomp::ExtendedViewFrameInfo live{};
+    live.vram = c.vram;
+    live.vram_size = 0x18000;
+    // These canvases are uploaded during VBlank. Measure at the first visible
+    // gameplay sample, not at frame start or repeatedly on every scanline.
+    // Only horizontal/vertical registers need to remain scanline-live.
+    const unsigned index = c.layer-1;
+    if ((s_battle_span_valid & (1u << index)) == 0) {
+        s_battle_layer_span[index] = battle_authored_width(&live, read16(c.io, 0x400, 8+c.layer*2));
+        s_battle_span_valid |= 1u << index;
+    }
+    if (c.layer == 2) {
+        if (!swordcraft3::battle_effect_contains(x, hofs, s_battle_layer_span[index])) return -1;
+        *out_x = x;
+        return 1;
+    }
+    if (!s_battle_backdrop_period)
+        s_battle_backdrop_period = battle_backdrop_period(live, read16(c.io,0x400,10),s_battle_layer_span[index]);
+    *out_x = swordcraft3::battle_backdrop_x(x, hofs, s_battle_backdrop_period);
+    return 1;
+}
+
 void swordcraft3_postprocess_wide_frame(std::uint8_t* rgb,
                                         std::uint32_t width,
                                         std::uint32_t height,
@@ -240,13 +308,32 @@ void swordcraft3_postprocess_wide_frame(std::uint8_t* rgb,
                 ++near_black;
         }
     }
-    if (near_black * 10u < kNativePixels * 9u) return;
+    if (near_black * 10u >= kNativePixels * 9u) {
+        for (std::uint32_t y = 0; y < 160u; ++y) {
+            std::uint8_t* row = rgb + static_cast<std::size_t>(y) * width * 3u;
+            std::memset(row, 0, static_cast<std::size_t>(extra_left) * 3u);
+            std::memset(row + static_cast<std::size_t>(extra_left + kNativeWidth) * 3u,
+                        0, static_cast<std::size_t>(extra_right) * 3u);
+        }
+        return;
+    }
 
-    for (std::uint32_t y = 0; y < 160u; ++y) {
-        std::uint8_t* row = rgb + static_cast<std::size_t>(y) * width * 3u;
-        std::memset(row, 0, static_cast<std::size_t>(extra_left) * 3u);
-        std::memset(row + static_cast<std::size_t>(extra_left + kNativeWidth) * 3u,
-                    0, static_cast<std::size_t>(extra_right) * 3u);
+    // Final presentation only: no guest palette/VRAM/OAM or original center
+    // writes. Never fabricate HUD pixels in a layer-isolation debugger view.
+    bool borders_applied = false;
+    if (s_battle_hud_candidate && swordcraft3_battle_hud_borders_enabled() &&
+        gba::g_ppu_debug_layer_mask == 0x1Fu) {
+        borders_applied = swordcraft3::extend_battle_hud_borders(
+            rgb, width, height, extra_left, extra_right);
+    }
+    if (should_emit_audit_frame(s_presentation_frame)) {
+        std::fprintf(stderr,
+            "swordcraft3_battle_hud_frame={\"frame\":%llu,"
+            "\"enabled\":%s,\"eligible\":%s,\"applied\":%s}\n",
+            static_cast<unsigned long long>(s_presentation_frame),
+            swordcraft3_battle_hud_borders_enabled() ? "true" : "false",
+            s_battle_hud_candidate ? "true" : "false",
+            borders_applied ? "true" : "false");
     }
 }
 
@@ -308,7 +395,7 @@ int swordcraft3_margin_x(int bg, int output_x, int output_y,
 
     const int hw_x = output_x - static_cast<int>(s_extra_left);
     const unsigned layer_bit = 1u << static_cast<unsigned>(bg);
-    if (s_expand_battle_objects && bg == 0 &&
+    if (s_battle_scenery && bg == 0 &&
         (hw_x < 0 || hw_x >= static_cast<int>(kNativeWidth))) {
         const bool authored =
             ((s_looped_bg_mask | s_natural_battle_bg_mask) &
@@ -372,6 +459,9 @@ int swordcraft3_margin_x(int bg, int output_x, int output_y,
 }
 
 void use_native_margin_policy() {
+    s_battle_scenery = false;
+    gba::g_ws_bg_margin_provider = nullptr;
+    s_battle_hud_candidate = false;
     s_mirrored_bg_mask = 0;
     s_looped_bg_mask = 0;
     s_natural_battle_bg_mask = 0;
@@ -397,6 +487,8 @@ void use_native_margin_policy() {
 }
 
 void initialize_extended_view(std::uint32_t, std::uint32_t) {
+    s_battle_scenery = false;
+    s_battle_hud_candidate = false;
     // Fail closed until the first per-frame register snapshot proves that the
     // current scene has a reviewed margin continuation.
     s_mirrored_bg_mask = 0;
@@ -431,6 +523,10 @@ void initialize_extended_view(std::uint32_t, std::uint32_t) {
 }
 
 void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
+    s_battle_backdrop_period = 0;
+    s_battle_span_valid = 0;
+    s_battle_hud_candidate = false;
+    s_presentation_frame = frame ? frame->frame_count + 1u : 0u;
     swordcraft3_true_map_update(frame);
     if (!frame || frame->view_width <= kNativeWidth) {
         use_native_margin_policy();
@@ -454,6 +550,12 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
         frame->io, frame->io_size, kDispcntOffset);
     const unsigned bg_mode = dispcnt & 0x7u;
     const bool forced_blank = (dispcnt & 0x80u) != 0;
+    const char* critical_setting = std::getenv("SWORDCRAFT3_CRITICAL_WIDESCREEN");
+    const bool critical_scene = (!critical_setting || std::strcmp(critical_setting, "0") != 0) &&
+        swordcraft3::battle_critical_layout(dispcnt,
+            read16(frame->io, frame->io_size, 8),
+            read16(frame->io, frame->io_size, 10),
+            read16(frame->io, frame->io_size, 12));
 
     // The game builds its field and battle scenes from single 256px screen
     // blocks used as scrolling ring buffers. A wrapped ring can never fill a
@@ -466,8 +568,9 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     // maps are measured from the live VRAM snapshot: terminal fill columns are
     // excluded. Natural mode consumes each finite map once in camera order;
     // the old loop and reflected policies remain explicit fallbacks.
-    // Affine/bitmap modes remain pillarboxed.
-    if (!forced_blank && bg_mode == 0) {
+    // Only the authenticated critical-hit Mode 1 family is also supported.
+    // Other affine/bitmap layouts remain pillarboxed.
+    if (!forced_blank && (bg_mode == 0 || critical_scene)) {
         std::uint16_t bgcnt[4]{};
         unsigned visible_layers = 0;
         for (unsigned bg = 0; bg < 4; ++bg) {
@@ -487,7 +590,7 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
         // Field/cutscene family: four consecutive screen blocks 5..8. BG0 is
         // dialogue/status chrome and stays centered; BG1..BG3 form the
         // scrolling environment and prefer the game's complete source maps.
-        field_scene = (visible_layers & 0xFu) == 0xFu &&
+        field_scene = bg_mode == 0 && (visible_layers & 0xFu) == 0xFu &&
             screen_block(0) == 5u && screen_block(1) == 6u &&
             screen_block(2) == 7u && screen_block(3) == 8u;
         if (field_scene) {
@@ -499,8 +602,14 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
         // Battle family: BG2 (char block 1, screen block 3) is the stable
         // signature. BG1/BG2 supply distant/effect planes, while BG0
         // multiplexes near arena art with the screen-space HUD.
-        battle_scene = (visible_layers & (1u << 2)) != 0 &&
-            char_block(2) == 1u && screen_block(2) == 3u;
+        battle_scene = critical_scene || (bg_mode == 0 &&
+            (visible_layers & (1u << 2)) != 0 &&
+            char_block(2) == 1u && screen_block(2) == 3u);
+        // Normal HUD uses BG0 screen/char block 0 at frame start. The final
+        // frame still has to authenticate its blank gutters and separators;
+        // this register family alone is not permission to paint over effects.
+        s_battle_hud_candidate = battle_scene &&
+            (visible_layers & 0x7u) == 0x7u && bgcnt[0] == 0u;
         if (battle_scene) {
             // Collect the complete battle layer stack first. BG0 multiplexes
             // the native HUD with the near forest/ground raster band; the
@@ -508,7 +617,10 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
             if ((visible_layers & (1u << 0)) != 0) {
                 margin_layers |= 1u << 0;
             }
-            if ((visible_layers & (1u << 2)) != 0)
+            // The critical BG2 canvas already extrapolates signed screen X
+            // through the shared affine renderer, with hardware wrap OFF.
+            // Never measure it as a text map or apply the regular BG2 loop.
+            if (!critical_scene && (visible_layers & (1u << 2)) != 0)
                 margin_layers |= 1u << 2;
             if ((visible_layers & (1u << 1)) != 0 &&
                 (bgcnt[1] & 0x4000u) != 0) {
@@ -597,7 +709,12 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
     s_extra_left = frame->extra_left;
     s_extra_right = frame->extra_right;
     s_expand_overworld_objects = field_scene && true_map_layers != 0;
-    s_expand_battle_objects = battle_scene;
+    s_battle_scenery = battle_scene;
+    // This is a presentation-only critical-hit fix: preserve its prior guest
+    // culling and native OBJ clip rather than changing simulation behavior.
+    s_expand_battle_objects = battle_scene && !critical_scene;
+    gba::g_ws_bg_margin_provider = battle_scene && battle_layer_fix_enabled() ?
+        swordcraft3_battle_margin : nullptr;
     gba::g_ws_tilemap_provider = swordcraft3_margin_tilemap;
     gba::g_ws_bg_x_provider = swordcraft3_margin_x;
     // Natural battle layers keep unmodified coordinates. Only BG0 needs the
@@ -641,6 +758,7 @@ void update_extended_view(const gbarecomp::ExtendedViewFrameInfo* frame) {
                 visible_layers |= 1u << bg;
         }
         const char* policy = forced_blank ? "forced_blank" :
+            critical_scene ? "battle_critical" :
             bg_mode != 0 ? "unsupported_mode" :
             battle_scene && natural_battle_layers ? "battle_natural" :
             battle_scene && looped_layers ? "battle_loop" :

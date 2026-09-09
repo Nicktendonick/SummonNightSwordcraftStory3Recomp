@@ -1,7 +1,11 @@
 # Developer handoff
 
-Prepared on 2026-08-13 for a new developer reviewing the Summon Night:
+Updated on 2026-09-07 for a new developer reviewing the Summon Night:
 Swordcraft Story 3 static-recompilation project.
+
+For the concise current checkpoint and recommended Astra continuation, read
+[ASTRA_HANDOFF.md](ASTRA_HANDOFF.md) first. This document retains the longer
+engineering history and validation context.
 
 ## Read this first
 
@@ -19,8 +23,8 @@ incomplete.
 | Area | Current branch | Intended contents |
 |---|---|---|
 | Root game repository | `agent/assist-and-native-pacing` | Swordcraft 3 configuration, game-specific scene policy, beta target, validation, and documentation |
-| `gbarecomp` submodule | `feature/swordcraft3-reusable` | Reusable runtime pacing, adaptive-view callbacks, Assist runtime services, save-state/rewind plumbing |
-| `recomp-ui` submodule | `feature/gba-assist-bindings` | Reusable launcher/runtime-menu controls and IPS/IPS32/BPS patch support |
+| `gbarecomp` submodule | `feature/swordcraft3-upstream-v2-20260820` | Reusable runtime pacing, adaptive-view callbacks, Assist runtime services, save-state/rewind plumbing |
+| `recomp-ui` submodule | `feature/swordcraft3-upstream-20260823` | Reusable launcher/runtime-menu controls and IPS/IPS32/BPS patch support |
 
 The root remote is
 `https://github.com/Nicktendonick/SummonNightSwordcraftStory3Recomp.git`.
@@ -175,7 +179,7 @@ release contract's exact-frame allowlist.
 
 - Widescreen remains experimental. Free exploration, map transitions, later
   battles, menus, and display-mode effects need broader manual coverage.
-- Battle widening loops each plane at its measured/verified usable visual span,
+- Battle widening samples each reviewed finite plane in natural camera order,
   limits BG0 to the active arena raster band, and widens the reviewed horizontal
   OAM-builder limits for recognized normal arenas. It does not
   expand collision or camera geometry, and HUD/unsupported effect layouts
