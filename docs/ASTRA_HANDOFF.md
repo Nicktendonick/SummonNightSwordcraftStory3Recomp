@@ -1,5 +1,25 @@
 # Astra continuation checkpoint
 
+## Latest source checkpoint (2026-09-09)
+
+The reviewed forest critical-hit Mode 1 layout now keeps wide scenery and tan
+HUD wings without looping the affine impact canvas. See
+[CRITICAL_HIT_WIDESCREEN.md](CRITICAL_HIT_WIDESCREEN.md) for tested build hashes,
+same-width before/after/rollback results, scope limits, and the rollback launcher.
+`Launch Debug Capture.bat` now opens the normal settings launcher before Play.
+Camera limits and translucent edge overlays were discussed but not implemented.
+
+The owner authorized pushing this source checkpoint after being informed that
+the game repository is public. The gbarecomp dependency remains private; its
+reusable scanline-context changes are commit `f85f0bc` on
+`fix/widescreen-scanline-margins-20260909`. A public clone still requires access
+to private submodules. No repository visibility change or binary release is
+part of this source push. Earlier notes below describe their historical state.
+
+The subsequent session `20260909-150403-385-beta` had recording/performance
+logs but no exported F10 snapshots when inspected. It is not additional visual
+validation; the critical-hit snapshot tests remain the evidence for this fix.
+
 Prepared 2026-09-07 as the capstone for the first Swordcraft Story 3 PC-port
 development phase. The project is playable, but it remains an experimental
 static-recompilation project rather than a finished release.
@@ -126,3 +146,72 @@ until the owner accepts screenshots or a playable build.
 
 After that, prioritize later-arena coverage, then the remaining dynamic-IWRAM
 static corpus, then long-session audio/performance and release packaging.
+
+## Owner's prerelease requirement (2026-09-07)
+
+After implementation and owner testing, prepare the GitHub prerelease workflow
+described in [PRERELEASE_PLAN.md](PRERELEASE_PLAN.md). The capstone tag is a
+development checkpoint, not a release. Package contents and distribution
+provenance must be reviewed before any executable is selected for staging.
+Publishing a release or changing repository visibility requires an explicit
+owner request after review of the final artifact list.
+
+The owner chose the title **Alpha unfinished-build v.01** and requested local
+release preparation. `Prepare Alpha Release.bat` invokes the game-specific
+allowlist packager in `tools/package_alpha.py`. It pins the existing English-beta
+executable hash, strips debug data from COPIES while checking loaded sections,
+includes required runtime DLLs and available notices, and produces inventory,
+checksums and restricted-PATH startup checks under the ignored `release-stage`.
+It never publishes. See `packaging/alpha-v01/LICENSE-REVIEW.md` for unresolved
+compiled game/BIOS distribution, license/provenance and clean-machine gates.
+The proposed tan HUD borders are not part of this release snapshot.
+
+## Local continuation: battle HUD borders (2026-09-08)
+
+The tan mock-up is now implemented in the local development executables,
+separately from the unchanged Alpha archive. See
+[BATTLE_HUD_BORDERS.md](BATTLE_HUD_BORDERS.md) for exact build hashes, before/after
+captures, validation coverage and rollback instructions. The in-game path is
+Escape → Display → Battle HUD borders (default on; not yet a pre-boot row).
+All new code is in the game repository; the existing shared hooks were enough.
+
+Village/forest five-frame replays passed at 284/320/384; Native centers and the
+gameplay band are protected, and Off matches the prior capstone's complete
+pixels/guest state. The verified overworld/NPC replay is unchanged. The forest
+has an existing Native/Wide guest-state discrepancy, reproduced unchanged in
+the old executable; retain it as a separate audit issue rather than claiming
+the border test resolved it. Four focused CTest checks passed.
+
+Next: owner visual acceptance, actual runtime-menu toggling, live resizing,
+moving battle cameras and attack/pause/transition effects. Do not push this
+presentation experiment until the owner accepts the screenshots/playable build.
+
+## Local correction (2026-09-09)
+
+The September 8 user captures exposed gauge colors extruded into tan margins,
+an unsupported taller START-paused HUD, and an off-by-one BG0 margin crop.
+Those are corrected in both `build-beta` executables; see the latest section
+of [BATTLE_HUD_BORDERS.md](BATTLE_HUD_BORDERS.md) for hashes, reproduction and
+rollback details. The earlier exact capstone-Off claim above is historical:
+Off now retains the corrected BG0 margin rows 18/124. Guest state and native
+center remain protected. Everything is game-owned; submodules remain clean.
+
+Next unresolved issue: particle popping at arena edges, with a specific but
+unproven signed-OAM-X lead documented there. Larger finite-map left/right
+coverage differences also remain open. Do not claim those fixed by the HUD
+and corner seam work. The Alpha archive remains unchanged; nothing pushed.
+
+## Subsequent battle-layer continuation (2026-09-09)
+
+The new F10 capture proved that part of the attack is on BG2, whose 256-pixel
+wrap caused duplicate edge flashes. The owner then explicitly requested fully
+matching, looping distant scenery, supplying a mountain-backdrop example.
+See [BATTLE_LAYER_CONTINUATION.md](BATTLE_LAYER_CONTINUATION.md) for the current
+implementation, exact-loop tests, rollback launcher, evidence, and limitations.
+The forest backdrop uses a verified 160-pixel cycle; effects use one copy.
+The game now uses an opt-in actual-scanline context hook in gbarecomp, alongside
+a fix for debugger layers leaking into authored margins. Those reusable edits
+are isolated on `fix/widescreen-scanline-margins-20260909`.
+Overworld boundaries and authentic native-center rendering remain unchanged.
+The earlier silhouette-clipped backdrop experiment was superseded by the
+owner's full-loop clarification. No release archive or remote was changed.

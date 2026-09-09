@@ -40,6 +40,7 @@ bios.cfg
 rom.cfg
 config.ini
 keybinds.ini
+swordcraft3-display.ini
 
 # Editors and OS
 .vscode/

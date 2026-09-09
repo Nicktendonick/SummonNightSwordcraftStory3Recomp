@@ -145,7 +145,22 @@ python .\tools\check_widescreen_contract.py `
   .\validation\adaptive-widescreen\<capture>\report.json
 ```
 
-For interactive diagnosis, run `tools/launch_visible_debugger.ps1`. F2 through
+For interactive diagnosis, double-click `Launch Debug Capture.bat`. It opens
+the normal English-beta launcher with diagnostics enabled: choose Display,
+Assist Tools, and other settings before pressing Play. Choose **Adaptive**
+for live window/arena resizing or **12:5 (Full Arena, 384 px)** for a fixed
+384-pixel view. Escape opens the in-game settings. The batch file no longer
+forces 284 pixels or bypasses the launcher by passing a ROM directly.
+
+The equivalent PowerShell command is
+`tools/launch_visible_debugger.ps1 -Edition Beta -ShowLauncher`.
+For scripted direct launch, omit `-ShowLauncher` and optionally supply
+`-ViewWidth 240..384` (default 284). `-PlanOnly` prints the launch plan without
+launching or writing files. Each real session saves `launch-plan.json` alongside
+its diagnostics; interactive display choices remain in the normal launcher
+preferences rather than this initial command-line plan.
+
+F2 through
 F7 isolate the composite and individual BG/OBJ layers, F8 pauses, F9 advances
 one exact guest frame, and F10 exports the frame, save state, state hash, report,
 and widescreen provenance into the project-local validation directory. The same

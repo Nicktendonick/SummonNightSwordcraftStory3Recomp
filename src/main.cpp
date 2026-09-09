@@ -5,6 +5,7 @@
 
 #include "runtime.h"
 #include "adaptive_widescreen.h"
+#include "swordcraft3_display_settings.h"
 
 #if defined(SWORDCRAFT3_RECOMP_UI)
 #include "game_launcher_boot.h"
@@ -60,6 +61,7 @@ int main(int argc, char** argv) {
         "beta BPS. Select that patch and the verified Japanese ROM.";
 #endif
     configure_swordcraft3_adaptive_widescreen(opts);
+    configure_swordcraft3_display_settings(opts, argc > 0 ? argv[0] : nullptr);
     // Native game rendering stays 3:2, but the host window itself may be
     // reshaped freely and will letterbox/pillarbox as needed.
     opts.freely_resizable_window = true;

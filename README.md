@@ -8,6 +8,13 @@ Monogatari - Hajimari no Ishi** (Game Boy Advance, Japan), built with
 For another developer taking over or reviewing the work, start with
 [docs/HANDOFF.md](docs/HANDOFF.md).
 
+For the **Alpha unfinished-build v.01** local release candidate, see
+[release notes](packaging/alpha-v01/RELEASE-NOTES.md) and
+[release preparation](docs/PRERELEASE_PLAN.md). Double-click
+`Prepare Alpha Release.bat` to create a fresh local review ZIP. This does not
+publish to GitHub or change the working build. Distribution review and
+clean-machine gameplay checks are still open.
+
 ## Status
 
 The repository wiring, first static corpus, private BIOS recompilation, and
@@ -84,6 +91,17 @@ faithful 240x160 view; fixed 16:9 renders 284x160, fixed 2:1 renders 320x160,
 and the experimental full-arena option renders 384x160. Adaptive follows the
 window's live aspect from native 3:2 up to the same 384-pixel limit.
 
+To record a debugging session, double-click **Launch Debug Capture.bat**.
+The normal launcher opens first, so these Display choices and Assist Tools
+remain available before Play. Choose **Adaptive** to resize the arena with
+the window. Press **F10** in game to capture diagnostics; recordings stay
+under `validation/visible-debugger/`. No rebuild is required for launcher
+script updates.
+
+Reviewed forest critical hits now retain widescreen scenery and the tan HUD
+borders while their non-wrapping affine impact effect plays. Other unreviewed
+affine screens remain pillarboxed. See [critical-hit validation and rollback](docs/CRITICAL_HIT_WIDESCREEN.md).
+
 The game adapter recognizes reviewed Mode 0 field/cutscene and battle layouts.
 Field scenes use the guest's retained complete map data where it can be
 authenticated and fall back to reflected nearest-edge samples otherwise;
@@ -123,6 +141,32 @@ scene policy selected on every sampled frame, and ranks persistent seams,
 pillarbox leaks, blank/frozen authored margins, and optional OBJ-isolation
 leaks. Raw captures remain ignored and can be reanalyzed without replaying the
 game. See [docs/WIDESCREEN_AUDIT.md](docs/WIDESCREEN_AUDIT.md).
+
+### Battle HUD borders (local development build)
+
+Press **Escape during play → Display → Battle HUD borders** to toggle the new
+experimental tan HUD margins. It defaults on for recognized normal battles;
+the pre-boot launcher does not yet have this game-specific row. The original
+240x160 HUD stays centered and unchanged, scenery keeps its existing width,
+and only the extra columns above/below the battle are filled. The native HUD's
+live colors and thin separators continue across those columns, including fades.
+The overworld and unrecognized/obscured HUD layouts are left alone.
+
+The setting is remembered in `swordcraft3-display.ini` beside the executable,
+separate from save states and the shared launcher configuration. Run
+`Launch Beta - Previous HUD Margins.bat` to restore the previous presentation
+for one session without changing the saved preference. Deterministic testing
+can set `SWORDCRAFT3_BATTLE_HUD_BORDERS=0` or `1` for the same session-only override.
+The existing Alpha unfinished-build v.01 archive is unchanged and predates this
+feature. See [battle HUD implementation notes](docs/BATTLE_HUD_BORDERS.md).
+
+The current local build also loops distant battle scenery using its matching
+pattern (160 pixels for the forest) and prevents the captured attack effect
+from repeating at the opposite edge. Foreground terrain and overworld black
+boundaries are unchanged. `Launch Beta - Previous Battle Layers.bat` restores
+the preceding battle-layer behavior for one session. See
+[battle layer continuation](docs/BATTLE_LAYER_CONTINUATION.md) for validation,
+performance caveats, shared-runtime branch, and remaining effect limitations.
 
 ## ROM patches and translations
 
