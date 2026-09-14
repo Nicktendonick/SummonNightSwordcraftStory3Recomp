@@ -1,0 +1,4 @@
+# Native-renderer lab: uses a separate battery-save path supplied by the helper.
+[save]
+type = "eeprom"
+size = "0x2000"

@@ -174,6 +174,14 @@ note = "Reviewed field/battle right OBJ culling limit for adaptive widescreen"
 addr = 0x08009BB4
 note = "Reviewed field/battle left OBJ culling distance for adaptive widescreen"
 
+[[thumb_alu_immediate_override]]
+addr = 0x080091CE
+note = "Custom field NPC shadow right cutoff; adapter must authenticate the shadow caller"
+
+[[thumb_alu_immediate_override]]
+addr = 0x080091E0
+note = "Custom field NPC shadow left cutoff; adapter must authenticate the shadow caller"
+
 [[extra_func]]
 addr = 0x08001B40
 mode = "thumb"
