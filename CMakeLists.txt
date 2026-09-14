@@ -44,6 +44,7 @@ target_include_directories(swordcraft3_presentation PUBLIC
 add_executable(SummonNightSwordcraftStory3Recomp
     src/main.cpp
     src/adaptive_widescreen.cpp
+    src/custom_renderer.cpp
     src/swordcraft3_true_map.cpp
     ${SWORDCRAFT3_GENERATED_SOURCES})
 
@@ -100,6 +101,12 @@ endif()
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
 
 if(BUILD_TESTING)
+    add_executable(swordcraft3_lake_animation_tests tests/custom_lake_animation_test.cpp)
+    target_include_directories(swordcraft3_lake_animation_tests PRIVATE src)
+    add_test(NAME swordcraft3_lake_animation_tests COMMAND swordcraft3_lake_animation_tests)
+    add_executable(swordcraft3_lake_control_tests tests/custom_lake_control_test.cpp)
+    target_include_directories(swordcraft3_lake_control_tests PRIVATE src)
+    add_test(NAME swordcraft3_lake_control_tests COMMAND swordcraft3_lake_control_tests)
     add_executable(swordcraft3_presentation_tests tests/test_battle_hud_borders.cpp)
     target_link_libraries(swordcraft3_presentation_tests PRIVATE swordcraft3_presentation)
     target_include_directories(swordcraft3_presentation_tests PRIVATE "${RECOMP_UI_ROOT}/src")
@@ -111,6 +118,47 @@ if(BUILD_TESTING)
                 -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
                 -p "test_audit_widescreen_route.py" -v)
     endif()
+endif()
+
+# Private fast iteration path: reuse this owner's unchanged English-beta guest
+# objects, never engine objects. It is deliberately not a distribution build.
+set(SC3_LAB_GUEST_OBJECT_DIR "" CACHE PATH "Private existing beta generated-object directory")
+if(SC3_LAB_GUEST_OBJECT_DIR)
+    file(GLOB lab_objects "${SC3_LAB_GUEST_OBJECT_DIR}/*.cpp.obj" "${SC3_LAB_GUEST_OBJECT_DIR}/*.c.obj")
+    list(LENGTH lab_objects lab_object_count)
+    if(lab_object_count LESS 20)
+        message(FATAL_ERROR "Missing private English-beta guest object corpus")
+    endif()
+    # The shadow position routine needs two newly opted-in immediate hooks.
+    # Regenerate privately and rebuild only those shards after proving the rest
+    # of the cached corpus is identical. Never edit the owner's cached objects.
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    get_filename_component(lab_cache_build "${SC3_LAB_GUEST_OBJECT_DIR}/../../.." ABSOLUTE)
+    set(lab_shadow_dir "${CMAKE_BINARY_DIR}/shadow-codegen")
+    set(lab_shadow_sources "${lab_shadow_dir}/recompiled_007.cpp" "${lab_shadow_dir}/recompiled_024.cpp")
+    file(GLOB lab_baseline_sources "${lab_cache_build}/generated-beta/*.cpp" "${lab_cache_build}/generated-beta/*.h")
+    add_custom_command(OUTPUT ${lab_shadow_sources} "${lab_shadow_dir}/recompiled.h"
+        COMMAND ${Python3_EXECUTABLE} -B "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_lab_shadow_codegen.py"
+            --recompiler "${lab_cache_build}/gbarecomp_build/gba_recompile.exe"
+            --rom "${lab_cache_build}/rom-patch-cache/swordcraft3_beta.gba"
+            --baseline "${lab_cache_build}/generated-beta" --output "${lab_shadow_dir}"
+        DEPENDS tools/prepare_lab_shadow_codegen.py symbols/swordcraft3_jp.toml symbols/imported_symbols.tsv
+            "${lab_cache_build}/gbarecomp_build/gba_recompile.exe"
+            "${lab_cache_build}/rom-patch-cache/swordcraft3_beta.gba" ${lab_baseline_sources}
+        VERBATIM)
+    list(FILTER lab_objects EXCLUDE REGEX "/recompiled_(007|024)\\.cpp\\.obj$")
+    set_source_files_properties(${lab_objects} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+    add_executable(Swordcraft3CustomRendererBeta src/main.cpp src/custom_renderer.cpp
+        src/adaptive_widescreen.cpp src/swordcraft3_true_map.cpp ${lab_objects} ${lab_shadow_sources})
+    target_compile_definitions(Swordcraft3CustomRendererBeta PRIVATE SWORDCRAFT3_BETA_BUILD)
+    target_include_directories(Swordcraft3CustomRendererBeta PRIVATE src "${lab_shadow_dir}"
+        "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba"
+        "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug")
+    target_link_libraries(Swordcraft3CustomRendererBeta PRIVATE swordcraft3_presentation
+        "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug
+        gbarecomp_gba gbarecomp_armv4t swordcraft3_launcher_ui "-Wl,--end-group")
+    target_link_options(Swordcraft3CustomRendererBeta PRIVATE "-Wl,--stack,16777216")
+    gbarecomp_stage_mingw_runtime(Swordcraft3CustomRendererBeta)
 endif()
 
 if(MSVC)
@@ -204,6 +252,7 @@ if(SWORDCRAFT3_BETA_BPS)
         swordcraft3_presentation
         "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
         gbarecomp_armv4t "-Wl,--end-group")
+    target_sources(SummonNightSwordcraftStory3RecompBeta PRIVATE src/custom_renderer.cpp)
     target_compile_definitions(SummonNightSwordcraftStory3RecompBeta PRIVATE
         SWORDCRAFT3_BETA_BUILD=1 GBARECOMP_DEFAULT_DEBUG_PORT=19854
         GBARECOMP_WINDOW_TITLE="Summon Night: Swordcraft Story 3 - English Beta"

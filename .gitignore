@@ -18,7 +18,8 @@ generated/*.json
 
 # Local reference checkouts and tool output
 references/
-third_party/
+third_party/*
+!third_party/supermetroid-renderer/
 build/
 build-*/
 .tooling/
