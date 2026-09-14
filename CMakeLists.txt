@@ -101,6 +101,10 @@ endif()
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
 
 if(BUILD_TESTING)
+    add_executable(swordcraft3_battle_identity_tests tests/custom_battle_identity_test.cpp
+        "${GBARECOMP_ROOT}/src/gba/sha1.cpp")
+    target_include_directories(swordcraft3_battle_identity_tests PRIVATE src "${GBARECOMP_ROOT}/src/gba")
+    add_test(NAME swordcraft3_battle_identity_tests COMMAND swordcraft3_battle_identity_tests)
     add_executable(swordcraft3_lake_animation_tests tests/custom_lake_animation_test.cpp)
     target_include_directories(swordcraft3_lake_animation_tests PRIVATE src)
     add_test(NAME swordcraft3_lake_animation_tests COMMAND swordcraft3_lake_animation_tests)
