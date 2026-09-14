@@ -19,6 +19,6 @@ try {
         '-DGBARECOMP_ENABLE_MODS=OFF')
     & $cmake @arguments
     if ($LASTEXITCODE -ne 0) { throw 'Experimental configure failed' }
-    & $cmake --build $build --target Swordcraft3CustomRendererBeta gba_native_capture_tests gba_host_presentation_tests swordcraft3_lake_control_tests swordcraft3_lake_animation_tests --parallel 1
+    & $cmake --build $build --target Swordcraft3CustomRendererBeta gba_native_capture_tests gba_host_presentation_tests swordcraft3_lake_control_tests swordcraft3_lake_animation_tests swordcraft3_presentation_tests swordcraft3_battle_identity_tests --parallel 1
     if ($LASTEXITCODE -ne 0) { throw 'Experimental build failed' }
 } finally { $env:PATH = $oldPath }

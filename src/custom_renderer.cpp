@@ -4,6 +4,7 @@
 #include "runtime_arm.h"
 #include "custom_field_scene.h"
 #include "custom_field_objects.h"
+#include "custom_battle_scene.h"
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
@@ -13,10 +14,13 @@ namespace {
 std::unique_ptr<gba::GbaRasterCapture> capture;
 std::array<std::uint8_t,gba::GbaPpu::kFramebufferBytes> output;
 unsigned matches=0, mismatches=0, incomplete=0;
+unsigned native_reused=0;
+bool check_native_replay=false;
 gbarecomp::ExtendedViewFrameInfo memory{};
 swordcraft3::CustomFieldScene lake;
+swordcraft3::CustomBattleScene battle;
 std::vector<std::uint8_t> wide_output;
-unsigned host_width=0, lake_frames=0, fallback_frames=0;
+unsigned host_width=0, lake_frames=0, battle_frames=0, fallback_frames=0;
 bool wide_ready=false;
 bool field_objects_enabled() {
     const char* enabled=std::getenv("SWORDCRAFT3_CUSTOM_OBJECTS");
@@ -53,7 +57,13 @@ int field_object_read(std::uint32_t pc,std::uint32_t address,std::uint32_t size,
     *value=original|bit; return 1;
 }
 int field_object_limit(std::uint32_t pc,std::uint32_t original,std::uint32_t* value) {
-    if(!value || !field_objects_enabled()) return 0;
+    if(!value) return 0;
+    if(battle.active() && ((pc==0x08009B9E && original==239) || (pc==0x08009BB4 && original==64))) {
+        const char* objects=std::getenv("SWORDCRAFT3_CUSTOM_OBJECTS");
+        if(objects && !std::strcmp(objects,"0")) return 0;
+        *value=original+(host_width-240)/2; return 1;
+    }
+    if(!field_objects_enabled()) return 0;
     if((pc==0x080091CE && original==239) || (pc==0x080091E0 && original==64)) {
         if(!swordcraft3::field_shadow_position_caller(g_cpu.R[14]) || !memory.iwram || memory.iwram_size<0x6b58) return 0;
         const unsigned field=unsigned(memory.iwram[0x6b54])|(unsigned(memory.iwram[0x6b55])<<8)|
@@ -76,11 +86,11 @@ int field_object_limit(std::uint32_t pc,std::uint32_t original,std::uint32_t* va
     return 0;
 }
 void reset_host() {
-    wide_ready=false; lake.reset();
+    wide_ready=false; lake.reset(); battle.reset();
     if(capture) capture->reset();
 }
 void observe(const gba::NativeRasterLineContext& line) {
-    if(line.y==0 && host_width>240) lake.capture(memory);
+    if(line.y==0 && host_width>240) { lake.capture(memory); battle.capture(memory); }
     capture->capture(line);
 }
 bool draw_host(const gbarecomp::HostFrameContext& frame) {
@@ -91,25 +101,38 @@ bool draw_host(const gbarecomp::HostFrameContext& frame) {
 }
 void present(std::uint8_t* stock, std::size_t bytes) {
     wide_ready=false;
-    if (!capture->draw_native(output.data(),bytes)) { ++incomplete; return; }
-    if (std::memcmp(stock,output.data(),bytes)!=0) {
+    if (!capture->complete() || bytes!=output.size()) { ++incomplete; return; }
+    if(check_native_replay) {
+        if(!capture->draw_native(output.data(),bytes)) { ++incomplete; return; }
+    } else {
+        // Reuse the real native scanout, not a second rendering of it. Battle
+        // draw_view still compares its entire center against this exact image.
+        std::memcpy(output.data(),stock,bytes);
+    }
+    if (check_native_replay && std::memcmp(stock,output.data(),bytes)!=0) {
         ++mismatches; // Never replace a picture that fails the native oracle.
         std::fprintf(stderr,"[sc3:custom] native mismatch=%u; stock retained\n",mismatches);
     } else {
-        ++matches;
+        if(check_native_replay) ++matches; else ++native_reused;
         std::memcpy(stock,output.data(),bytes);
         if(host_width>240) {
             wide_output.assign(std::size_t(host_width)*160*3,0);
             wide_ready=lake.draw(*capture,wide_output.data(),host_width);
-            if(wide_ready) ++lake_frames; else ++fallback_frames;
+            if(wide_ready) ++lake_frames;
+            else {
+                wide_ready=battle.draw(*capture,output.data(),wide_output.data(),host_width);
+                if(wide_ready) ++battle_frames; else ++fallback_frames;
+            }
             if(!wide_ready && std::getenv("SWORDCRAFT3_CUSTOM_AUDIT"))
-                std::fprintf(stderr,"[sc3:host-decline] completed=%u reason=%s\n",matches,lake.decline_reason());
+                std::fprintf(stderr,"[sc3:host-decline] completed=%u reason=%s battle=%s\n",matches+native_reused,lake.decline_reason(),battle.decline_reason());
         }
     }
-    if ((matches+mismatches)%60==0)
-        std::fprintf(stderr,"[sc3:custom] matches=%u mismatches=%u incomplete=%u\n",matches,mismatches,incomplete);
-    if (host_width>240 && (matches+mismatches)%60==0)
+    if ((matches+mismatches+native_reused)%60==0)
+        std::fprintf(stderr,"[sc3:custom] matches=%u mismatches=%u incomplete=%u native_reused=%u\n",matches,mismatches,incomplete,native_reused);
+    if (host_width>240 && (matches+mismatches+native_reused)%60==0)
         std::fprintf(stderr,"[sc3:host] width=%u lake=%u fallback=%u guest=240 reason=%s\n",host_width,lake_frames,fallback_frames,lake.decline_reason());
+    if(host_width>240 && (matches+mismatches+native_reused)%60==0)
+        std::fprintf(stderr,"[sc3:battle] frames=%u reason=%s\n",battle_frames,battle.decline_reason());
     capture->reset();
 }
 void initialize(const gbarecomp::ExtendedViewFrameInfo* frame) {
@@ -131,7 +154,10 @@ void configure_swordcraft3_custom_renderer(gbarecomp::RunOptions& opts) {
         // and wrapped-negative OAM X ranges eventually overlap.
         if(end!=width && *end=='\0' && parsed>240 && parsed<=384) host_width=unsigned(parsed);
     }
-    matches=mismatches=incomplete=lake_frames=fallback_frames=0;
+    matches=mismatches=incomplete=lake_frames=battle_frames=fallback_frames=native_reused=0;
+    const char* replay_check=std::getenv("SWORDCRAFT3_CUSTOM_REPLAY_CHECK");
+    check_native_replay=replay_check && !std::strcmp(replay_check,"1");
+    std::fprintf(stderr,"[sc3:custom] extra native replay check=%s\n",check_native_replay?"on":"off");
     reset_host();
     // Guest scanout remains native; only field draw-list visibility is widened.
     // No legacy BG hooks, camera changes, interpolation or generated scenery.

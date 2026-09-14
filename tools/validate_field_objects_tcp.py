@@ -9,11 +9,16 @@ def png(path,w,h,rgb):
     raw=b''.join(b'\0'+rgb[y*w*3:(y+1)*w*3] for y in range(h))
     path.write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b''))
 
-def run(state,out,width,enabled,steps,keys):
+def run(state,out,width,enabled,steps,keys,feature='objects'):
     out.mkdir(parents=True,exist_ok=False)
     env=os.environ.copy()
     env.update(SWORDCRAFT3_CUSTOM_RENDERER='1',SWORDCRAFT3_CUSTOM_HOST_WIDTH=str(width),
         SWORDCRAFT3_CUSTOM_OBJECTS=str(enabled),GBARECOMP_SELFHEAL_RECOMPILE='0',SDL_AUDIODRIVER='dummy',SDL_VIDEODRIVER='dummy')
+    if feature=='battles':
+        env.update(SWORDCRAFT3_CUSTOM_OBJECTS='1',SWORDCRAFT3_CUSTOM_BATTLES=str(enabled))
+    if feature=='replay':
+        env.update(SWORDCRAFT3_CUSTOM_OBJECTS='1',SWORDCRAFT3_CUSTOM_BATTLES='1',
+                   SWORDCRAFT3_CUSTOM_REPLAY_CHECK=str(enabled))
     for k in ('GBARECOMP_INPUT_REPLAY','GBARECOMP_INPUT_RECORD','GBARECOMP_VISIBLE_DEBUGGER','GBARECOMP_DEBUG_CAPTURE_DIR'):
         env.pop(k,None)
     with socket.socket() as probe:
@@ -74,12 +79,13 @@ def main():
     p.add_argument('--width',type=int,choices=(284,320,384),default=384)
     p.add_argument('--steps',type=int,default=60);p.add_argument('--keys',type=lambda s:int(s,0),default=1023)
     p.add_argument('--expected-last-host',help='SHA256 of a separately reviewed final RGB host image, including margins')
+    p.add_argument('--feature',choices=('objects','battles','replay'),default='objects',help='Feature to compare disabled/enabled')
     a=p.parse_args();out=a.output_dir.resolve();state=a.state.resolve()
     assert out.is_relative_to(ROOT/'validation') and 3<=a.steps<=300
     out.mkdir(parents=True,exist_ok=False)
     digest=hashlib.sha256(state.read_bytes()).hexdigest()
-    before,bhash=run(state,out/'before',a.width,0,a.steps,a.keys)
-    after,ahash=run(state,out/'after',a.width,1,a.steps,a.keys)
+    before,bhash=run(state,out/'before',a.width,0,a.steps,a.keys,a.feature)
+    after,ahash=run(state,out/'after',a.width,1,a.steps,a.keys,a.feature)
     changed=[f for (f,n,h),(g,m,j) in zip(before,after) if h!=j]
     center_changed=[f for (f,n,h),(g,m,j) in zip(before,after) if f!=g or n!=m]
     e0=(out/'before/ewram.bin').read_bytes();e1=(out/'after/ewram.bin').read_bytes()
@@ -89,7 +95,7 @@ def main():
     def draw_storage(i):
         npc=i-field-0xab8; entity=i-field-0x1538
         return (0<=npc<32*0x54 and npc%0x54>=0x1c) or (0<=entity<32*0x3c and entity%0x3c>=0x14)
-    report=dict(frames=len(after),width=a.width,changed_margin_frames=changed,native_difference_frames=center_changed,
+    report=dict(frames=len(after),width=a.width,feature=a.feature,changed_margin_frames=changed,native_difference_frames=center_changed,
         last_host_rgb_sha256=hashlib.sha256(after[-1][2]).hexdigest(),
         visual_reference_checked=bool(a.expected_last_host),
         region_difference_counts={key:sum(b[key]!=c[key] for b,c in zip(bhash,ahash)) for key in ('ewram','iwram','vram','pal','oam','cycles')},
@@ -99,6 +105,9 @@ def main():
         executable_sha256=hashlib.sha256((ROOT/'build-native/Swordcraft3CustomRendererBeta.exe').read_bytes()).hexdigest())
     (out/'report.json').write_text(json.dumps(report,indent=2));print(json.dumps(report),flush=True)
     assert report['source_unchanged'] and not center_changed
+    if a.feature=='replay':
+        assert not changed, 'Removing native replay changed the complete host picture'
+        assert bhash==ahash, 'Removing native replay changed guest state'
     if a.expected_last_host:
         assert report['last_host_rgb_sha256']==a.expected_last_host, 'Offscreen-inclusive visual regression'
 

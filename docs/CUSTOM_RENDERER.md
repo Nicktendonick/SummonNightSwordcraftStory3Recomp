@@ -3,7 +3,9 @@
 Current scope: three authenticated outdoor scenes (opening lake, village-chief
 outdoors and the adjoining village outdoors). Use the same top-level
 `Launch Custom Renderer Lake Test.bat`; its menu now says lake and village.
-All other maps and battles remain native. Conversations retain native framing
+All other maps and battles remain native in that launcher. An opt-in
+[forest combat pilot](CUSTOM_COMBAT_RENDERER.md) is available separately through
+`Launch Combat Renderer Test.bat`. Conversations retain native framing
 until player control returns. Milestones below are historical; the final
 section describes the village expansion and its validation. The subsequent
 [NPC graphics-residency correction](NPC_RESIDENCY_FIX.md) supersedes the original
