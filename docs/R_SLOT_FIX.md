@@ -1,5 +1,9 @@
 # R-slot arena identification fix — 2026-09-14
 
+**September 19 correction:** the grounded-only identity below omitted upper
+scenery exposed while jumping. [Manig/airborne notes](MANIG_BATTLE_WIDESCREEN.md)
+supersede its near-map ranges and hashes. HUD storage remains excluded.
+
 The usual `Launch Combat Renderer Test.bat` now keeps the verified forest wide
 while cycling the six R slots. Extra native correctness redraw remains OFF.
 

@@ -1,5 +1,16 @@
 # Custom combat renderer pilot — 2026-09-13
 
+**September 21 update:** [game-state hooks](BATTLE_STATE_HOOKS.md) now own custom
+battle eligibility and HUD bands. The pixel-oracle/color-recognition requirements
+below are historical, not the current custom path. Validate at **12:5** using
+state/control-flow assertions only.
+
+**Current continuation (September 19):** the game-owned pilot also recognizes
+the Manig Mine rocky/slime arena, and scenery authentication includes the
+upper rows exposed by jumping. See [current notes](MANIG_BATTLE_WIDESCREEN.md).
+The forest-only coverage, hashes and rocky-fallback results below describe the
+original pilot, not the expanded scope. Extra native redraw remains OFF.
+
 This is an opt-in forest-arena pilot, not support for every battle arena.
 The accepted lake/village renderer and its normal launcher remain available.
 The [September 14 R-slot fix](R_SLOT_FIX.md) separates scenery identity from
@@ -15,7 +26,7 @@ Both combat launchers use that path. See
 R-selection issue or expand arena coverage.
 
 Run `Launch Combat Renderer Test.bat` in `experiments/custom-renderer`.
-Choose 16:9 first; 320- and 384-pixel host widths are also available. The launcher
+Choose option 3, 12:5 (384 pixels), for current testing. The launcher
 uses the existing experimental playtest save and capture controls (F10).
 It sets `SWORDCRAFT3_CUSTOM_BATTLES=1` for that launch only.
 

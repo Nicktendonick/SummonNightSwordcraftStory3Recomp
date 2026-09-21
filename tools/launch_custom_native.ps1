@@ -39,7 +39,16 @@ try {
         $env:GBARECOMP_DEBUG_CAPTURE_DIR = $captures
         $env:GBARECOMP_INPUT_RECORD = Join-Path $captures 'session-input.trace'
         Write-Host "Field scenery test: $HostWidth pixel display; the game still renders at 240x160."
-        Write-Host 'Lake, village-chief outdoors and village outdoors include extended regular sprites. Dialogue/battles use black margins.'
+        Write-Host 'Lake, village-chief outdoors and village outdoors include extended regular sprites. Dialogue keeps native framing.'
+        if ($env:SWORDCRAFT3_CUSTOM_BATTLES -eq '1') {
+            if ($env:SWORDCRAFT3_CUSTOM_ROCKY -eq '0') {
+                Write-Host 'Forest combat widescreen enabled; rocky arena disabled for this comparison.'
+            } else {
+                Write-Host 'Forest and Manig Mine rocky combat widescreen enabled. Unverified arenas remain native.'
+            }
+        } else {
+            Write-Host 'Field-only test: battles use black margins.'
+        }
         Write-Host "Press F10 to capture an issue. Captures: $captures"
     } else {
         Write-Host 'Native renderer lab: intentional 240x160 correctness test.'

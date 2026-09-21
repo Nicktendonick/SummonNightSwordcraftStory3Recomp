@@ -85,7 +85,8 @@ def main():
                 if name=='width-320':
                     (out/'mmio.json').write_text(json.dumps(call('mmio_cap',count=4096)))
                 if args.expect_fixed:
-                    assert row['colored_margins'] == (name != 'rocky-victory'), name
+                    # Rocky/Manig now has its own authenticated profile too.
+                    assert row['colored_margins'], name
             def cycle_advance(n, key):
                 if not args.expect_fixed:
                     call('run_frames', n=n, keyinput=key)

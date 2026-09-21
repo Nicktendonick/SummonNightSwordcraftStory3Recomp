@@ -9,7 +9,7 @@ def png(path,w,h,rgb):
     raw=b''.join(b'\0'+rgb[y*w*3:(y+1)*w*3] for y in range(h))
     path.write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b''))
 
-def run(state,out,width,enabled,steps,keys,feature='objects'):
+def run(state,out,width,enabled,steps,keys,feature='objects',executable=None,schedule=None,draw_audit=False,screenshots=()):
     out.mkdir(parents=True,exist_ok=False)
     env=os.environ.copy()
     env.update(SWORDCRAFT3_CUSTOM_RENDERER='1',SWORDCRAFT3_CUSTOM_HOST_WIDTH=str(width),
@@ -19,11 +19,14 @@ def run(state,out,width,enabled,steps,keys,feature='objects'):
     if feature=='replay':
         env.update(SWORDCRAFT3_CUSTOM_OBJECTS='1',SWORDCRAFT3_CUSTOM_BATTLES='1',
                    SWORDCRAFT3_CUSTOM_REPLAY_CHECK=str(enabled))
+    if feature=='rocky':
+        env.update(SWORDCRAFT3_CUSTOM_OBJECTS='1',SWORDCRAFT3_CUSTOM_BATTLES='1',
+                   SWORDCRAFT3_CUSTOM_ROCKY=str(enabled),SWORDCRAFT3_CUSTOM_REPLAY_CHECK='0')
     for k in ('GBARECOMP_INPUT_REPLAY','GBARECOMP_INPUT_RECORD','GBARECOMP_VISIBLE_DEBUGGER','GBARECOMP_DEBUG_CAPTURE_DIR'):
         env.pop(k,None)
     with socket.socket() as probe:
         probe.bind(('127.0.0.1',0));port=probe.getsockname()[1]
-    args=[str(ROOT/'build-native/Swordcraft3CustomRendererBeta.exe'),'--tcp',str(port),
+    args=[str(executable or ROOT/'build-native/Swordcraft3CustomRendererBeta.exe'),'--tcp',str(port),
         '--bios',str(OWNER/'gbarecomp/bios/gba_bios.bin'),'--rom',str(OWNER/'build-beta/rom-patch-cache/swordcraft3_beta.gba'),
         '--save',str(out/'private.eep'),'--view-width','240',str(ROOT/'native-test.toml')]
     records=[];pictures=[];hashes=[]
@@ -49,7 +52,7 @@ def run(state,out,width,enabled,steps,keys,feature='objects'):
                 return response
             call('savestate_load',path=str(state))
             for i in range(steps):
-                call('set_keyinput',value=keys if i<steps-10 else 1023)
+                call('set_keyinput',value=schedule[i] if schedule is not None else (keys if i<steps-10 else 1023))
                 frame=call('step')['frame']
                 native=call('screenshot');host=call('host_screenshot')
                 a=bytes.fromhex(native['data']);b=bytes.fromhex(host['data'])
@@ -59,11 +62,15 @@ def run(state,out,width,enabled,steps,keys,feature='objects'):
                 assert b''.join(b[(y*width+left)*3:(y*width+left+240)*3] for y in range(160))==a
                 pictures.append((frame,a,b))
                 hashes.append(call('state_hash'))
-                if i in (1,steps//2,steps-1): png(out/f'frame-{frame}.png',width,160,b)
+                if draw_audit:
+                    hashes[-1]['iwram_data']=bytes.fromhex(call('read_iwram',addr=0,len=0x8000)['data'])
+                if i in (1,steps//2,steps-1) or i in screenshots: png(out/f'frame-{frame}.png',width,160,b)
             call('set_keyinput',value=1023)
             for region,length in (('ewram',0x40000),('iwram',0x8000),('oam',0x400),('io',0x400),('vram',0x18000),('pal',0x400)):
                 snapshot=call('read_'+region,addr=0,len=length)
                 (out/(region+'.bin')).write_bytes(bytes.fromhex(snapshot['data']))
+            if os.environ.get('SWORDCRAFT3_CUSTOM_AUDIT'):
+                (out/'mmio.json').write_text(json.dumps(call('mmio_cap',count=4096)))
             call('quit');stream.close();connection.close();connection=None
             process.wait(timeout=15)
             assert process.returncode==0
