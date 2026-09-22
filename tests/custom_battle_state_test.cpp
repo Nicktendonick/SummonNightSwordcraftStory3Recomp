@@ -22,13 +22,19 @@ int main() {
     check(!read_battle_state(ram.data(),ram.size(),0x03001a90,0,s));
     put32(0x6ac0,0x03000000);
     // All menu substates and all six traced pause extents retain ownership.
-    for(unsigned arena:{0u,3u}) for(unsigned mode=0;mode<8;++mode)
+    for(unsigned arena:{0u,2u,3u,7u}) for(unsigned mode=0;mode<8;++mode)
         for(unsigned pause=0;pause<4;++pause) for(unsigned top=18;top<=58;top+=8) {
             ram[0x1a94]=arena;ram[0xc]=mode;ram[0xf]=pause;put16(0x1d30,top);
             check(read_battle_state(ram.data(),ram.size(),0x03001a90,0,s));
             check(battle_state_supported(s));
         }
     s.arena=1; check(!battle_state_supported(s)); s.arena=0;
+    for(unsigned id=0;id<256;++id) {
+        s.arena=id;
+        check(battle_state_supported(s)==(id==0 || id==2 || id==3 || id==7));
+        check(battle_uses_authored_384(id)==(id==2 || id==7));
+    }
+    s.arena=0;
     s.enabled=false; check(!battle_state_supported(s)); s.enabled=true;
     s.variant=3; check(!battle_state_supported(s)); s.variant=0;
     s.top_switch=19; check(!battle_state_supported(s)); s.top_switch=18;

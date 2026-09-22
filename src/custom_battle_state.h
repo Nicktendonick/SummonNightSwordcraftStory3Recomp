@@ -36,10 +36,14 @@ inline bool read_battle_state(const std::uint8_t* ram,std::size_t size,
     out.top_switch=battle_read16(ram+0x1d30);
     return true;
 }
+inline bool battle_uses_authored_384(unsigned arena) {
+    // Reviewed 08031420 asset headers: IDs 2 and 7 have 384x160 near/far maps.
+    return arena==2 || arena==7;
+}
 inline bool battle_state_supported(const BattleState& s) {
     // Do not key eligibility to normal/airborne/ability/pause submodes. The
     // call of the battle raster scheduler is the scene-ownership proof.
-    return s.enabled && s.variant!=3 && (s.arena==0 || s.arena==3) &&
+    return s.enabled && s.variant!=3 && (s.arena==0 || s.arena==3 || battle_uses_authored_384(s.arena)) &&
         s.hud_cnt==0 && s.scenery_cnt==0x470b &&
         s.top_switch>=18 && s.top_switch<=58 && (s.top_switch-18)%8==0;
 }

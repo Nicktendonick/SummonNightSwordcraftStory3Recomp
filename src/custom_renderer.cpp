@@ -134,6 +134,8 @@ void present(std::uint8_t* stock, std::size_t bytes) {
     if(host_width>240) {
         wide_output.assign(std::size_t(host_width)*160*3,0);
         wide_ready=lake.draw(*capture,wide_output.data(),host_width);
+        if(state_trace) std::fprintf(stderr,"[sc3:field-frame] completed=%u valid=%u wide=%u decodes=%u scene=%s reason=%s\n",
+            native_reused,unsigned(lake.valid()),unsigned(wide_ready),lake.source_decodes(),lake.scene_name(),lake.decline_reason());
         if(wide_ready) ++lake_frames;
         else {
             wide_ready=battle.draw(*capture,output.data(),wide_output.data(),host_width);

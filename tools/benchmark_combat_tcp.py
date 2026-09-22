@@ -9,7 +9,8 @@ from pathlib import Path
 from validate_field_objects_tcp import ROOT, OWNER, png
 
 
-def run(state, out, custom, battles, width, count, repeats, replay_check=1, phase_profile=1):
+def run(state, out, custom, battles, width, count, repeats, replay_check=1, phase_profile=1,
+        screenshots=True, general_fields=0):
     out.mkdir()
     env = os.environ.copy()
     for key in ('GBARECOMP_INPUT_REPLAY', 'GBARECOMP_INPUT_RECORD',
@@ -17,6 +18,7 @@ def run(state, out, custom, battles, width, count, repeats, replay_check=1, phas
                 'GBARECOMP_SAMPLE', 'SWORDCRAFT3_CUSTOM_AUDIT'):
         env.pop(key, None)
     env.update(SWORDCRAFT3_CUSTOM_RENDERER=str(custom),
+               SWORDCRAFT3_CUSTOM_GENERAL_FIELDS=str(general_fields),
                SWORDCRAFT3_CUSTOM_BATTLES=str(battles),
                SWORDCRAFT3_CUSTOM_OBJECTS='1', SWORDCRAFT3_CUSTOM_HOST_WIDTH=str(width),
                SWORDCRAFT3_CUSTOM_REPLAY_CHECK=str(replay_check),
@@ -65,8 +67,9 @@ def run(state, out, custom, battles, width, count, repeats, replay_check=1, phas
                 samples.append(dict(seconds=seconds, ms_per_frame=seconds*1000/count,
                                     processing_fps=count/seconds, response=result))
                 states.append(call('state_hash'))
-            shot = call('host_screenshot' if custom else 'screenshot')
-            png(out/'final.png', shot['w'], shot['h'], bytes.fromhex(shot['data']))
+            if screenshots:
+                shot = call('host_screenshot' if custom else 'screenshot')
+                png(out/'final.png', shot['w'], shot['h'], bytes.fromhex(shot['data']))
             call('quit')
             stream.close()
             connection.close()
@@ -80,6 +83,7 @@ def run(state, out, custom, battles, width, count, repeats, replay_check=1, phas
                 process.terminate()
                 process.wait(timeout=10)
     return dict(custom=custom, battles=battles, width=width, replay_check=replay_check,
+                general_fields=general_fields, screenshots=screenshots,
                 phase_profile=phase_profile, frames_per_batch=count,
                 median_ms_per_frame=statistics.median(s['ms_per_frame'] for s in samples),
                 samples=samples, end_states=states)

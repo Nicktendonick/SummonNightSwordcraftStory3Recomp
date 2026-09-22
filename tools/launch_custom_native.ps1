@@ -38,13 +38,20 @@ try {
         $env:GBARECOMP_VISIBLE_DEBUGGER = '1'
         $env:GBARECOMP_DEBUG_CAPTURE_DIR = $captures
         $env:GBARECOMP_INPUT_RECORD = Join-Path $captures 'session-input.trace'
-        Write-Host "Field scenery test: $HostWidth pixel display; the game still renders at 240x160."
-        Write-Host 'Lake, village-chief outdoors and village outdoors include extended regular sprites. Dialogue keeps native framing.'
+        Write-Host "Custom renderer test: $HostWidth pixel display; the game still renders at 240x160."
+        Write-Host 'Supported fields: lake, village-chief outdoors, village outdoors and the captured 888x312 and 632x616 maps. Dialogue keeps native framing.'
+        if ($env:SWORDCRAFT3_CUSTOM_GENERAL_FIELDS -eq '1') {
+            Write-Host 'General-field experiment ON: compatible ROM-backed static maps can widen without a room allowlist.'
+            Write-Host 'Existing animated profiles remain supported; unfamiliar animations/layer modes fall back to native.'
+        }
+        if ($env:SWORDCRAFT3_CUSTOM_ADDITIONAL_AREAS -eq '0') {
+            Write-Host 'Previous-area comparison: the new 888x312 and 632x616 maps and battle arenas 2 and 7 are disabled.'
+        }
         if ($env:SWORDCRAFT3_CUSTOM_BATTLES -eq '1') {
             if ($env:SWORDCRAFT3_CUSTOM_ROCKY -eq '0') {
                 Write-Host 'Forest combat widescreen enabled; rocky arena disabled for this comparison.'
             } else {
-                Write-Host 'Forest and Manig Mine rocky combat widescreen enabled. Unverified arenas remain native.'
+                Write-Host 'Reviewed combat arenas 0, 2, 3 and 7 enabled, subject to the area switches above. Unverified arenas remain native.'
             }
         } else {
             Write-Host 'Field-only test: battles use black margins.'

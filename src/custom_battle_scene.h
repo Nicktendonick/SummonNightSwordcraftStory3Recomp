@@ -68,7 +68,10 @@ class CustomBattleScene {
             if(cnt!=0x470b) return -1; // HUD, including expanded START pause
             if(!battle_near_row_reviewed(c->screen_y,u16(c->io+0x12))) return -1;
             const int camera=hofs>=384 ? int(hofs)-512 : int(hofs);
-            if(x+camera<0 || x+camera>=512) return -1;
+            // Reviewed new arena headers declare 384x160; the 512-wide VRAM
+            // allocation includes padding, not additional authored terrain.
+            const int near_width=battle_uses_authored_384(scene.state_.arena) ? 384 : 512;
+            if(x+camera<0 || x+camera>=near_width) return -1;
             *out=x; return 1; // finite near map, never mirrored or looped
         }
         if(c->layer==1) {
@@ -100,6 +103,10 @@ public:
         if(!enabled || std::strcmp(enabled,"1")) { decline_="disabled"; return; }
         if(!owned) { decline_="no-battle-owner"; return; }
         if(!battle_state_supported(state)) { decline_="unsupported-battle-state"; return; }
+        const char* additional=std::getenv("SWORDCRAFT3_CUSTOM_ADDITIONAL_AREAS");
+        if(battle_uses_authored_384(state.arena) && additional && !std::strcmp(additional,"0")) {
+            decline_="additional-area-disabled"; return;
+        }
         if(!m.io || m.io_size<0x10 || !m.vram || m.vram_size<0x4800) return;
         const char* rocky=std::getenv("SWORDCRAFT3_CUSTOM_ROCKY");
         if(state.arena==3 && rocky && !std::strcmp(rocky,"0")) {
@@ -136,7 +143,9 @@ public:
                 decline_="incomplete-hud-schedule"; return false;
             }
         }
-        backdrop_period_=period(first.vram.data(),0x450b,span(first.vram.data(),0x450b));
+        // Arenas 2/7: sub_08031420 loads assets 34/39 with 384x160 headers.
+        // Retain each row's own scroll; repeat that authored strip only.
+        backdrop_period_=battle_uses_authored_384(state_.arena) ? 384 : period(first.vram.data(),0x450b,span(first.vram.data(),0x450b));
         const auto& gameplay=*raster.line(60);
         effect_span_=(gameplay.dispcnt&7)==0 ? span(gameplay.vram.data(),u16(gameplay.io.data()+12)) : 0;
         gba::GbaReplayViewPolicy policy;

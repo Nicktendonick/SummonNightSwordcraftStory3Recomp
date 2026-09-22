@@ -27,6 +27,13 @@ int main() {
     const auto* lake=custom_field_profile(360,320);
     const auto* chief=custom_field_profile(512,320);
     const auto* village=custom_field_profile(512,400);
+    const auto* wide_field=custom_field_profile(888,312);
+    const auto* large_field=custom_field_profile(632,616);
+    if(!large_field || large_field->columns!=79 || large_field->rows!=77 ||
+       large_field->animation_ticks!=0 || !large_field->additional ||
+       large_field->columns*large_field->rows>swordcraft3::kCustomFieldMaxCells) return 8;
+    if(!wide_field || wide_field->columns!=111 || wide_field->rows!=39 ||
+       wide_field->animation_ticks!=0 || wide_field->columns*wide_field->rows>swordcraft3::kCustomFieldMaxCells) return 7;
     if(!lake || !chief || !village || lake==chief || chief==village ||
        lake->animation_ticks!=14 || village->animation_ticks!=8) return 5;
     if(custom_field_profile(256,256) || custom_field_profile(512,512) ||

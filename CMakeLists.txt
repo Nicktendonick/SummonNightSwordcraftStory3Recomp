@@ -101,6 +101,13 @@ endif()
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
 
 if(BUILD_TESTING)
+    add_executable(swordcraft3_field_action_tests tests/custom_field_action_test.cpp)
+    target_include_directories(swordcraft3_field_action_tests PRIVATE src)
+    add_test(NAME swordcraft3_field_action_tests COMMAND swordcraft3_field_action_tests)
+    add_executable(swordcraft3_field_source_tests tests/custom_field_source_test.cpp)
+    target_include_directories(swordcraft3_field_source_tests PRIVATE src)
+    target_compile_options(swordcraft3_field_source_tests PRIVATE $<$<CXX_COMPILER_ID:GNU>:-UNDEBUG>)
+    add_test(NAME swordcraft3_field_source_tests COMMAND swordcraft3_field_source_tests)
     add_executable(swordcraft3_battle_state_tests tests/custom_battle_state_test.cpp)
     target_include_directories(swordcraft3_battle_state_tests PRIVATE src)
     add_test(NAME swordcraft3_battle_state_tests COMMAND swordcraft3_battle_state_tests)
@@ -120,6 +127,10 @@ if(BUILD_TESTING)
     add_test(NAME swordcraft3_presentation_tests COMMAND swordcraft3_presentation_tests)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME swordcraft3_field_provenance_unit
+            COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+                -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+                -p "test_field_provenance.py" -v)
         add_test(NAME swordcraft3_widescreen_route_audit_unit
             COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"

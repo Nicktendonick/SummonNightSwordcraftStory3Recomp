@@ -74,6 +74,10 @@ def main():
         ('rocky-victory', victory, '1023:60', True),
         ('victory-exit', victory, '1023:60,1022:3,1023:30,1022:3,1023:30,1022:3,1023:30,1022:3,1023:90', None),
         ('lake-negative', field, '1023:30', False),
+        ('arena2-r', ROOT/'validation/playtest-20260921-115042-843/frame-0000009350-1790005934164/state.gbas',
+         '1023:6,'+','.join(['767:3,1023:15']*8), True),
+        ('wide-field-negative', ROOT/'validation/playtest-20260921-115042-843/frame-0000003773-1790005895680/state.gbas',
+         '1023:60', False),
     ]
     if a.cases:
         assert set(a.cases)<={c[0] for c in cases}
@@ -120,7 +124,18 @@ def main():
             assert after[-1]['battle']['phase']==0, f'{name}: did not finish teardown'
             assert any(f['active']=='1' and f['wide']=='1' for f in frames)
         elif battle:
-            assert all(f['active']=='1' and f['wide']=='1' for f in frames), f'{name}: {[f for f in frames if f["wide"]!="1" or f["active"]!="1"][:5]}'
+            eligible=frames
+            if name=='arena2-r' and frames[0]['hooks']=='0':
+                # This snapshot begins before its first scheduler callback.
+                # Permit only the identical, unowned first frame in BOTH builds.
+                before_lines=(out/name/'before/stderr.log').read_text().splitlines()
+                first_before=next(dict(re.findall(r'(\w+)=([^ ]+)', line))
+                                  for line in before_lines if '[sc3:state-frame]' in line)
+                assert frames[0]==first_before
+                assert frames[0]['completed']=='1' and frames[0]['active']=='0' and frames[0]['wide']=='0'
+                assert frames[0]['reason']=='no-battle-owner'
+                eligible=frames[1:]
+            assert eligible and all(f['active']=='1' and f['wide']=='1' for f in eligible), f'{name}: {[f for f in eligible if f["wide"]!="1" or f["active"]!="1"][:5]}'
         else:
             assert all(f['active']=='0' for f in frames), f'{name}: battle hook leaked into field'
         if battle is None:
