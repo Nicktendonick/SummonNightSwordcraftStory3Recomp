@@ -111,6 +111,25 @@ void rendering_tests() {
     CHECK(!swordcraft3::extend_battle_hud_borders(nullptr, 384, 160, 72, 72));
 
     auto paused = frame(384, 72);
+    // START slides the separator in eight-row steps, not directly to y59.
+    for (unsigned top : {27u,35u,43u,51u}) {
+        auto moving=frame(384,72);
+        for(unsigned y=16;y<top;++y)
+            for(unsigned x=0;x<240;++x)
+                put(moving,384,72+x,y,y<top-3?kTan:
+                    (y==top-3?Color{181,115,82}:(y==top-2?Color{255,189,0}:Color{107,0,0})));
+        auto original=moving;
+        CHECK(swordcraft3::extend_battle_hud_borders(moving.data(),384,160,72,72));
+        for(unsigned y=0;y<160;++y)
+            for(unsigned x=0;x<384;++x) {
+                const bool protected_pixel=(x>=72 && x<312) || (y>=top && y<125);
+                CHECK(get(moving,384,x,y)==get(original,384,protected_pixel?x:80,y));
+            }
+        put(original,384,72+90,top-2,{4,5,6});
+        auto broken=original;
+        CHECK(!swordcraft3::extend_battle_hud_borders(broken.data(),384,160,72,72));
+        CHECK(broken==original);
+    }
     for (unsigned y = 16; y < 56; ++y) {
         for (unsigned x = 0; x < 240; ++x)
             put(paused, 384, 72+x, y, kTan);

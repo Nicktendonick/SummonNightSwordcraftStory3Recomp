@@ -9,6 +9,9 @@
 #include "custom_field_profiles.h"
 #include "custom_field_events.h"
 #include "custom_field_objects.h"
+#include "custom_field_source.h"
+#include "custom_field_animation.h"
+#include "custom_field_action.h"
 #include <array>
 #include <cstring>
 #include <cstdio>
@@ -19,19 +22,23 @@ namespace swordcraft3 {
 // pointers, invented decoration, wrapping or camera changes. Regular objects
 // are sampled from each immutable raster row; the native center is untouched.
 class CustomFieldScene {
-    static constexpr unsigned kMaxCells=64*50;
     const CustomFieldProfile* profile_=nullptr;
-    unsigned columns_=0,rows_=0;
+    FieldSourceCache sources_;
+    FieldAnimationCache animation_sources_;
+    FieldOwner owner_{};
+    const std::uint8_t* checked_rom_=nullptr;
+    std::size_t checked_rom_size_=0;
+    bool supported_rom_=false,general_=false;
     struct Layer {
-        std::array<std::uint8_t,kMaxCells*2> map{};
-        unsigned scroll_x=0,scroll_y=0,bias=0;
+        std::vector<std::uint8_t> map;
+        unsigned columns=0,rows=0,scroll_x=0,scroll_y=0,bias=0;
     };
     std::array<Layer,3> layers_{};
     std::array<std::array<Layer,3>,4> phases_{};
     struct Animation { unsigned bg,x,y,w,h; };
     std::array<Animation,32> animations_{};
     unsigned animation_count_=0;
-    std::array<std::array<unsigned char,kMaxCells>,3> owners_{};
+    std::array<std::vector<unsigned char>,3> owners_{};
     bool valid_=false;
     mutable const char* decline_="not-captured";
     static unsigned u16(const std::uint8_t* p) { return gba::text_u16(p); }
@@ -51,6 +58,7 @@ class CustomFieldScene {
         // the captured ring, not a single phase shared by the entire scene.
         const unsigned count=u16(d+0x10),base=u16(d+0x14);
         if(count>32 || base+count>32 || u16(d)!=0x4000) return false;
+        if(count && !profile_) return false; // New animation families need separate evidence.
         const std::uint64_t list=u32(d+0x28),table=u32(d+0x2C);
         for(unsigned i=0;i<count;++i) {
             const auto* p=rom_bytes(m,list+i*6,6);
@@ -62,7 +70,7 @@ class CustomFieldScene {
             if(!header) return false;
             const unsigned frames=header[0],w=header[2],h=header[3];
             const unsigned next=m.iwram[0x2D50+base+i],timer=m.iwram[0x2AF0+base+i];
-            if(!lake_animation_clock_valid(frames,next,timer,profile_->animation_ticks) || !w || !h || p[0]+w>columns_ || p[1]+h>rows_) {
+            if(!lake_animation_clock_valid(frames,next,timer,profile_->animation_ticks) || !w || !h || p[0]+w>l.columns || p[1]+h>l.rows) {
                 if(std::getenv("SWORDCRAFT3_CUSTOM_AUDIT"))
                     std::fprintf(stderr,"[sc3:animation-state] base=%u index=%u frames=%u next=%u timer=%u x=%u y=%u w=%u h=%u\n",base,i,frames,next,timer,p[0],p[1],w,h);
                 return false;
@@ -73,7 +81,7 @@ class CustomFieldScene {
                 animations_[animation_count_]={bg,p[0],p[1],w,h};
                 ++animation_count_;
                 for(unsigned y=0;y<h;++y) for(unsigned x=0;x<w;++x) {
-                    auto& owner=owners_[bg-1][(p[1]+y)*columns_+p[0]+x];
+                    auto& owner=owners_[bg-1][(p[1]+y)*l.columns+p[0]+x];
                     if(owner) return false; // Overlapping animation needs its own model.
                     owner=static_cast<unsigned char>(animation_count_);
                 }
@@ -89,7 +97,7 @@ class CustomFieldScene {
             const auto* data=rom_bytes(m,address+4+visible*stride,stride);
             if(!data) return false;
             for(unsigned y=0;y<h;++y)
-                std::memcpy(l.map.data()+((p[1]+y)*columns_+p[0])*2,data+2+y*w*2,w*2);
+                std::memcpy(l.map.data()+((p[1]+y)*l.columns+p[0])*2,data+2+y*w*2,w*2);
         }
         return true;
     }
@@ -100,26 +108,18 @@ class CustomFieldScene {
         return int(descriptor)+delta;
     }
     bool entry(unsigned bg,int x,int y,std::uint16_t& value) const {
-        if(x<0 || x>=int(columns_*8) || y<0 || y>=int(rows_*8)) return false;
         const auto& l=layers_[bg-1];
-        value=std::uint16_t(u16(l.map.data()+((y/8)*columns_+x/8)*2)+l.bias);
+        if(x<0 || x>=int(l.columns*8) || y<0 || y>=int(l.rows*8)) return false;
+        value=std::uint16_t(u16(l.map.data()+((y/8)*l.columns+x/8)*2)+l.bias);
         return true;
     }
     bool eligible(const gba::GbaRasterCapture::Line& line,unsigned y) const {
         const auto* io=line.io.data();
-        const auto* vram=line.vram.data();
         if ((line.dispcnt&0xEF87u)!=0x0F00u || u16(io+8)!=0x0500 ||
             u16(io+10)!=0x0605 || u16(io+12)!=0x0706 || u16(io+14)!=0x080B ||
             (u16(io+0x50)&0xC0u)) { decline_="display-or-effect"; return false; }
-        // Reject screen-space UI even if dialogue was dimmed via palette rather
-        // than BLDCNT. Inspect this captured raster row, never frame-start VRAM.
-        for(unsigned x=0;x<240;++x) {
-            unsigned hx=x+(u16(io+0x10)&511),hy=y+(u16(io+0x12)&511);
-            std::uint16_t e=0,color=0;
-            if (!gba::text_ring_entry(0x500,hx,hy,vram,line.vram.size(),e) ||
-                gba::sample_text_entry(0x500,e,hx,hy,vram,line.vram.size(),
-                    line.pal.data(),line.pal.size(),color)) { decline_="screen-ui"; return false; }
-        }
+        // Scene/control authorization is from the task owner and script flags.
+        // BG0 colors or visibility must never classify dialogue or menus.
         return true;
     }
 public:
@@ -133,49 +133,90 @@ public:
             gba::sha1(memory.ewram+0x6cd0,64).hex()=="6f29204f532fbe80bf81ebbe22f278a7d2f2cb29";
     }
     bool objects_allowed(const gbarecomp::ExtendedViewFrameInfo& memory) const {
-        unsigned flags=0;
-        return valid_ && (lake_player_control(memory.ewram,memory.ewram_size,memory.iwram,memory.iwram_size,&flags) ||
-            verified_ambient(memory,flags));
+        FieldOwner current;
+        return valid_ && read_field_owner({memory.ewram,memory.ewram_size},{memory.iwram,memory.iwram_size},current) &&
+            current.pointer==owner_.pointer &&
+            (!general_ || sources_.matches_key({memory.ewram,memory.ewram_size},{memory.iwram,memory.iwram_size},current)) &&
+            (current.free_control() || field_tool_action({memory.ewram,memory.ewram_size},current) ||
+             verified_ambient(memory,current.flags));
     }
     const char* decline_reason() const { return decline_; }
-    void reset() { valid_=false; profile_=nullptr; columns_=rows_=0; }
+    unsigned source_decodes() const { return sources_.decodes; }
+    unsigned animation_decodes() const { return animation_sources_.decodes; }
+    const char* scene_name() const { return profile_ ? profile_->name : "general-field"; }
+    void reset() { valid_=false; profile_=nullptr; owner_={}; sources_.reset(); animation_sources_.reset(); }
     bool capture(const gbarecomp::ExtendedViewFrameInfo& memory) {
-        reset(); decline_="map-identity";
-        animation_count_=0; owners_={};
-        if(!memory.iwram || memory.iwram_size<0x2D70 || !memory.ewram) return false;
+        valid_=false; profile_=nullptr; decline_="field-owner"; animation_count_=0;
+        if(!memory.iwram || !memory.ewram || !memory.rom) return false;
+        if(checked_rom_!=memory.rom || checked_rom_size_!=memory.rom_size) {
+            checked_rom_=memory.rom; checked_rom_size_=memory.rom_size;
+            const auto hash=gba::sha1(memory.rom,memory.rom_size).hex();
+            supported_rom_=hash=="3f5253fcf57e07ce52472bd29a61d16b98a12376" || hash=="bb2eebf98deb59bb6218442c2308bb5033ae2915";
+            sources_.reset(); animation_sources_.reset();
+        }
+        if(!supported_rom_) { decline_="field-rom-revision"; return false; }
+        if(!read_field_owner({memory.ewram,memory.ewram_size},{memory.iwram,memory.iwram_size},owner_)) {
+            sources_.reset(); animation_sources_.reset(); return false;
+        }
+        const char* general=std::getenv("SWORDCRAFT3_CUSTOM_GENERAL_FIELDS");
+        general_=general && !std::strcmp(general,"1");
+        decline_="scripted-animation";
         // The separate scripted animation list is not reconstructed in this
         // pilot. Any active entry declines rather than extending the wrong art.
         for(unsigned i=0;i<12;++i) if(memory.iwram[0x29C0+i*8]) return false;
         const auto* first=memory.iwram+0x2A20+0x34;
         profile_=custom_field_profile(u16(first+4),u16(first+6));
-        if(!profile_) return false;
-        columns_=profile_->columns; rows_=profile_->rows;
-        if(columns_*rows_>kMaxCells) return false;
-        const unsigned map_bytes=columns_*rows_*2;
+        if(general_) {
+            if(!sources_.capture({memory.ewram,memory.ewram_size},{memory.iwram,memory.iwram_size},
+                                {memory.rom,memory.rom_size},owner_)) {
+                decline_=sources_.reason; return false;
+            }
+            if(profile_) for(unsigned bg=0;bg<3;++bg) {
+                const auto& source=sources_.maps[bg];
+                if(source.columns!=profile_->columns || source.rows!=profile_->rows ||
+                   gba::sha1(source.entries.data(),source.entries.size()).hex()!=profile_->hashes[bg]) {
+                    profile_=nullptr; break;
+                }
+            }
+        } else if(!profile_) { decline_="map-identity"; return false; }
+        const char* additional=std::getenv("SWORDCRAFT3_CUSTOM_ADDITIONAL_AREAS");
+        if(profile_ && profile_->additional && additional && !std::strcmp(additional,"0")) {
+            decline_="additional-area-disabled"; return false;
+        }
+        if(general_ && !animation_sources_.capture({memory.ewram,memory.ewram_size},
+               {memory.iwram,memory.iwram_size},{memory.rom,memory.rom_size},owner_,sources_.maps)) {
+            decline_=animation_sources_.reason; return false;
+        }
         for(unsigned bg=1;bg<=3;++bg) {
             const auto* d=memory.iwram+0x2A20+bg*0x34;
             auto& l=layers_[bg-1];
+            l.columns=general_ ? sources_.maps[bg-1].columns : profile_->columns;
+            l.rows=general_ ? sources_.maps[bg-1].rows : profile_->rows;
+            const unsigned map_bytes=l.columns*l.rows*2;
             const unsigned source=u32(d+0x1C);
-            if(u16(d+4)!=columns_*8 || u16(d+6)!=rows_*8 || source<0x02000000) return false;
+            if(u16(d+4)!=l.columns*8 || u16(d+6)!=l.rows*8 || source<0x02000000) return false;
             const std::size_t off=source-0x02000000;
             if(off>memory.ewram_size || map_bytes>memory.ewram_size-off) return false;
-            std::memcpy(l.map.data(),memory.ewram+off,map_bytes);
-            if(gba::sha1(l.map.data(),map_bytes).hex()!=profile_->hashes[bg-1]) return false;
+            l.map.assign(memory.ewram+off,memory.ewram+off+map_bytes);
+            if(general_) owners_[bg-1]=animation_sources_.owners[bg-1];
+            else owners_[bg-1].assign(l.columns*l.rows,0);
+            if(!general_ && gba::sha1(l.map.data(),map_bytes).hex()!=profile_->hashes[bg-1]) return false;
             l.scroll_x=u16(d+8);l.scroll_y=u16(d+10);
             l.bias=u16(d+0x1A)+(unsigned(d[0x19])<<12);
-            for(unsigned phase=0;phase<4;++phase) {
+            if(!general_) for(unsigned phase=0;phase<4;++phase) {
                 phases_[phase][bg-1]=l;
                 if(!animate(phases_[phase][bg-1],d,memory,phase+1)) {
                     decline_="animation-descriptor"; return false;
                 }
             }
         }
-        unsigned field_flags=0;
-        const bool player_control=lake_player_control(memory.ewram,memory.ewram_size,memory.iwram,memory.iwram_size,&field_flags);
-        const bool ambient_event=!player_control && verified_ambient(memory,field_flags);
-        if(!player_control && !ambient_event) {
+        const unsigned field_flags=owner_.flags;
+        const bool player_control=owner_.free_control();
+        const bool tool_action=field_tool_action({memory.ewram,memory.ewram_size},owner_);
+        const bool ambient_event=!player_control && !tool_action && verified_ambient(memory,field_flags);
+        if(!player_control && !tool_action && !ambient_event) {
             if(std::getenv("SWORDCRAFT3_CUSTOM_AUDIT"))
-                std::fprintf(stderr,"[sc3:field-control] scene=%s flags=%05x\n",profile_->name,field_flags);
+                std::fprintf(stderr,"[sc3:field-control] scene=%s flags=%05x\n",scene_name(),field_flags);
             if(std::getenv("SWORDCRAFT3_CUSTOM_AUDIT_DETAIL") && memory.iwram_size>=0x65D8 && memory.ewram_size>=24) {
                 const auto* vm=memory.iwram+0x6590;
                 const unsigned ip=u32(vm+0x30),base=u32(vm+0x28);
@@ -189,6 +230,8 @@ public:
         }
         if(ambient_event && std::getenv("SWORDCRAFT3_CUSTOM_AUDIT"))
             std::fprintf(stderr,"[sc3:field-ambient] verified chief sound/flag event\n");
+        if(tool_action && std::getenv("SWORDCRAFT3_STATE_TRACE"))
+            std::fprintf(stderr,"[sc3:field-tool] flags=%04x permission=action-owned\n",field_flags);
         valid_=true; decline_="none";
         return true;
     }
@@ -200,17 +243,17 @@ public:
         // Authorize each placement independently. Static cells must still match
         // exactly, and all visible cells of an animation must agree on a phase.
         std::array<unsigned,32> allowed; allowed.fill(15);
-        layers_=phases_[0];
+        if(!general_) layers_=phases_[0];
         for(unsigned y=0;y<160;++y) {
             const auto& line=*capture.line(y); const auto* io=line.io.data();
             for(unsigned bg=1;bg<=3;++bg) {
                 const auto& l=layers_[bg-1];
                 const unsigned hx=u16(io+0x10+bg*4)&511,hy=u16(io+0x12+bg*4)&511;
                 const int sx=align(l.scroll_x,hx),sy=align(l.scroll_y,hy)+int(y);
-                if(sx<0 || sx+239>=int(columns_*8) || sy<0 || sy>=int(rows_*8)) { decline_="camera-bounds"; return false; }
+                if(sx<0 || sx+239>=int(l.columns*8) || sy<0 || sy>=int(l.rows*8)) { decline_="camera-bounds"; return false; }
                 // One sample per intersecting tile on each captured raster row.
                 for(unsigned x=0;x<240;) {
-                    const unsigned index=(unsigned(sy)/8)*columns_+(unsigned(sx)+x)/8;
+                    const unsigned index=(unsigned(sy)/8)*l.columns+(unsigned(sx)+x)/8;
                     std::uint16_t ring=0;
                     if(!gba::text_ring_entry(u16(io+8+bg*2),hx+x,hy+y,line.vram.data(),line.vram.size(),ring)) return false;
                     const unsigned owner=owners_[bg-1][index];
@@ -218,6 +261,12 @@ public:
                         if(std::uint16_t(u16(l.map.data()+index*2)+l.bias)!=ring) {
                             decline_="static-source-ring-disagreement"; return false;
                         }
+                    } else if(general_) {
+                        const auto& a=animation_sources_.placements[owner-1];
+                        const unsigned cell=(index/l.columns-a.y)*a.w+(index%l.columns-a.x);
+                        if(!animation_sources_.phases[owner-1].constrain(ring,[&](unsigned frame) {
+                            return std::uint16_t(animation_sources_.entry(a,frame,cell)+l.bias);
+                        })) { decline_="animation-source-ring-disagreement"; return false; }
                     } else {
                         unsigned match=0;
                         for(unsigned p=0;p<4;++p)
@@ -234,13 +283,23 @@ public:
                 }
             }
         }
-        for(unsigned i=0;i<animation_count_;++i) {
+        if(general_) for(unsigned i=0;i<animation_sources_.placements.size();++i) {
+            const auto& a=animation_sources_.placements[i];
+            const unsigned frame=animation_sources_.phases[i].selected();
+            auto& l=layers_[a.bg-1];
+            for(unsigned y=0;y<a.h;++y) for(unsigned x=0;x<a.w;++x) {
+                const unsigned offset=((a.y+y)*l.columns+a.x+x)*2;
+                const auto value=animation_sources_.entry(a,frame,y*a.w+x);
+                l.map[offset]=std::uint8_t(value); l.map[offset+1]=std::uint8_t(value>>8);
+            }
+        }
+        else for(unsigned i=0;i<animation_count_;++i) {
             unsigned phase=0; while(!(allowed[i]&(1u<<phase))) ++phase;
             const auto& a=animations_[i];
             // Fully offscreen / visually ambiguous placements use the most
             // recent RAM-completed phase (next-1), not a cached prior picture.
             for(unsigned y=0;y<a.h;++y) {
-                const unsigned offset=((a.y+y)*columns_+a.x)*2;
+                const unsigned offset=((a.y+y)*layers_[a.bg-1].columns+a.x)*2;
                 std::memcpy(layers_[a.bg-1].map.data()+offset,phases_[phase][a.bg-1].map.data()+offset,a.w*2);
             }
         }

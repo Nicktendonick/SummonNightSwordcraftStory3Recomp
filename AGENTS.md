@@ -17,3 +17,11 @@ finishes.
 - Put reusable launcher UI work in the `recomp-ui` submodule on its dedicated
   feature branch.
 - Never commit ROM, BIOS, save, or ROM-derived generated files.
+
+# State-based investigation
+
+- User instruction (2026-09-21): do not use pixels, screenshots, visual
+  recognition, or framebuffer comparisons as assertions or scene detection.
+- Trace game state and verified game hooks; use memory, control-flow, register
+  schedules and input-driven state assertions to validate modifications.
+- Current combat investigation targets 12:5 (384x160), not 16:9 or 2:1.

@@ -36,9 +36,10 @@ bool extend_battle_hud_borders(std::uint8_t* rgb, unsigned width,
     // scanline blending/brightness. No fixed RGB, previous-frame color, or
     // "most common color" guess (the HP bars often dominate that statistic).
     // START expands the top HUD by 40 rows (separator 56..58). Recognize
-    // either completed layout, never infer a HUD from a single tan row.
+    // the completed layouts and observed 8-row animation steps, never infer
+    // a HUD from a single tan row. Both gutters and all separators still match.
     unsigned top_end = 0;
-    for (unsigned candidate : {kBattleHudTopEnd, 59u}) {
+    for (unsigned candidate : {kBattleHudTopEnd, 27u, 35u, 43u, 51u, 59u}) {
         bool matches = true;
         for (unsigned y = 0; y < candidate - 3; ++y) {
             colors[y] = pixel(8, y);
