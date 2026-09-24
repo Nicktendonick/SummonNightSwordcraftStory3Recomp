@@ -45,6 +45,13 @@ inline bool field_tool_action(FieldBytes e,const FieldOwner& owner) {
         }
         found=true;
     }
-    return found;
+    // 0809DA98 retires the draw action before the next update installs
+    // 0809E3ED. In that handoff, 080A4724 consumes this exact request phase
+    // at field+1EB8+18; bit 0x40 suspends that consumer. Authenticate the
+    // pending gameplay state, not a frame-count grace period. Check it only
+    // after the action scan so scripts/unknown lock owners still reject.
+    const bool bow_pending=tool==6 && !(owner.flags&0x40) &&
+        (field16(e.data()+root+0x1ed0)&0x700)==0x100;
+    return found || bow_pending;
 }
 }

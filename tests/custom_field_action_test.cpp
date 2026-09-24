@@ -198,6 +198,57 @@ int main() {
         expect("bow callback requires the bow tool", fixture, false);
     }
 
+    // The bow queues a projectile after retiring its initial action. The
+    // next field update consumes (request & 0x700) == 0x100 at 080A4724.
+    // Low/high unrelated bits must not turn other pending phases into a bow.
+    for (unsigned tool = 0; tool < 7; ++tool) {
+        for (unsigned phase = 0; phase < 8; ++phase) {
+            for (unsigned other : {0u, 2u, 3u, 0xf8ffu}) {
+                fixture = Fixture{};
+                fixture.tool(tool);
+                put16(fixture.ram, root_offset + 0x1ed0, (phase << 8) | other);
+                expect("pending bow uses exact consumer phase and tool", fixture,
+                       tool == 6 && phase == 1);
+            }
+        }
+    }
+    fixture = Fixture{};
+    fixture.tool(6);
+    put16(fixture.ram, root_offset + 0x1ed0, 0x102);
+    fixture.action(0, tool_callback, 0, 0);
+    expect("retired draw action with pending projectile", fixture, true);
+    put16(fixture.ram, root_offset + 0x1ed0, 0);
+    expect("no cached permission after pending request clears", fixture, false);
+    put16(fixture.ram, root_offset + 0x1ed0, 0x102);
+    for (unsigned flags : {0u, 1u, 4u, 0x1001u, 0x1004u, 0x1040u}) {
+        fixture.flags(flags);
+        expect("pending bow cannot bypass scripts or suspended request consumer", fixture, false);
+    }
+    fixture.flags(0x1000);
+    fixture.action(7, 0x08012345, 0, 1, 0x10, 2);
+    expect("passive unrelated action alongside pending bow", fixture, true);
+    for (unsigned slot = 0; slot < action_count; ++slot) {
+        fixture = Fixture{};
+        fixture.tool(6);
+        put16(fixture.ram, root_offset + 0x1ed0, 0x102);
+        fixture.action(slot, 0x0809b849);
+        expect("pending bow cannot override arbitrary-event lock", fixture, false);
+        fixture.action(slot, bow_callback, 2);
+        expect("pending bow cannot hide malformed active bow state", fixture, false);
+        fixture.action(slot, tool_callback, 0, 3);
+        expect("pending bow cannot hide malformed allocation flags", fixture, false);
+        fixture.action(slot, tool_callback, 1, 1, 0x1000, 0);
+        expect("pending bow cannot hide wrong lock masks", fixture, false);
+    }
+    fixture = Fixture{};
+    fixture.tool(6);
+    put16(fixture.ram, root_offset + 0x1ed0, 0x102);
+    put16(fixture.ram, root_offset, 0x1004);
+    expect("pending bow requires current matching owner flags", fixture, false);
+    fixture.flags(0x1000);
+    fixture.ram.resize(root_offset + 0x1ed0 + 1);
+    expect("truncated pending request and action pool", fixture, false);
+
     // The shared object dispatcher has subtype-specific progress states;
     // independent control-flow review established 9 as the largest substate.
     for (unsigned tool = 0; tool < 6; ++tool) {
