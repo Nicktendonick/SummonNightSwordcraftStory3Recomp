@@ -15,6 +15,7 @@ std::unique_ptr<gba::GbaRasterCapture> capture;
 std::array<std::uint8_t,gba::GbaPpu::kFramebufferBytes> output;
 unsigned incomplete=0;
 unsigned native_reused=0;
+unsigned completed_frames=0,complete_frames=0;
 gbarecomp::ExtendedViewFrameInfo memory{};
 swordcraft3::CustomFieldScene lake;
 swordcraft3::CustomBattleScene battle;
@@ -48,6 +49,7 @@ void battle_entry(std::uint32_t pc) {
 std::vector<std::uint8_t> wide_output;
 unsigned host_width=0, lake_frames=0, battle_frames=0, fallback_frames=0;
 bool wide_ready=false;
+bool complete_frame_ready=false;
 bool field_objects_enabled() {
     const char* enabled=std::getenv("SWORDCRAFT3_CUSTOM_OBJECTS");
     return host_width>240 && (!enabled || std::strcmp(enabled,"0")) && lake.objects_allowed(memory);
@@ -112,6 +114,7 @@ int field_object_limit(std::uint32_t pc,std::uint32_t original,std::uint32_t* va
     return 0;
 }
 void reset_host() {
+    complete_frame_ready=false;
     wide_ready=false; lake.reset(); battle.reset(); battle_state.reset();
     spell_display_epoch.reset();
     if(capture) capture->reset();
@@ -128,6 +131,11 @@ void observe(const gba::NativeRasterLineContext& line) {
 bool draw_host(const gbarecomp::HostFrameContext& frame) {
     if(!wide_ready || frame.width!=host_width || frame.height!=160) return false;
     std::memcpy(frame.output_rgb,wide_output.data(),wide_output.size());
+    if(complete_frame_ready) {
+        if(!frame.ownership) return false;
+        *frame.ownership=gbarecomp::HostFrameOwnership::complete_frame;
+        return true;
+    }
     // Native scanout is authoritative. Reset invalidates retained margins on
     // load/rewind; no framebuffer comparison is used to recognize the scene.
     for(unsigned y=0;y<160;++y)
@@ -135,34 +143,42 @@ bool draw_host(const gbarecomp::HostFrameContext& frame) {
     return true;
 }
 void present(std::uint8_t* stock, std::size_t bytes) {
+    complete_frame_ready=false;
     wide_ready=false;
     if (!capture->complete() || bytes!=output.size()) { ++incomplete; return; }
     std::memcpy(output.data(),stock,bytes);
-    ++native_reused;
+    ++completed_frames;
     if(host_width>240) {
         wide_output.assign(std::size_t(host_width)*160*3,0);
         wide_ready=lake.draw(*capture,wide_output.data(),host_width);
         if(state_trace) std::fprintf(stderr,"[sc3:field-frame] completed=%u valid=%u wide=%u decodes=%u animations=%u scene=%s reason=%s\n",
-            native_reused,unsigned(lake.valid()),unsigned(wide_ready),lake.source_decodes(),lake.animation_decodes(),lake.scene_name(),lake.decline_reason());
+            completed_frames,unsigned(lake.valid()),unsigned(wide_ready),lake.source_decodes(),lake.animation_decodes(),lake.scene_name(),lake.decline_reason());
         if(wide_ready) ++lake_frames;
         else {
             wide_ready=battle.draw(*capture,output.data(),wide_output.data(),host_width);
-            battle.trace_raster(*capture,native_reused);
+            complete_frame_ready=wide_ready && battle.full_frame();
+            if(state_trace) {
+                const auto& stats=battle.render_stats();
+                std::fprintf(stderr,"[sc3:composition] completed=%u complete_owner=%u rows=%u center=%u extended=%u affine_rows=%u\n",
+                    completed_frames,unsigned(complete_frame_ready),stats.rows,stats.center_columns,stats.extended_columns,stats.affine_rows);
+            }
+            battle.trace_raster(*capture,completed_frames);
             if(wide_ready) ++battle_frames; else ++fallback_frames;
         }
         if(!wide_ready && std::getenv("SWORDCRAFT3_CUSTOM_AUDIT"))
-            std::fprintf(stderr,"[sc3:host-decline] completed=%u reason=%s battle=%s\n",native_reused,lake.decline_reason(),battle.decline_reason());
+            std::fprintf(stderr,"[sc3:host-decline] completed=%u reason=%s battle=%s\n",completed_frames,lake.decline_reason(),battle.decline_reason());
     }
     if(state_trace) {
         const auto& s=battle.state();
         std::fprintf(stderr,"[sc3:state-frame] completed=%u hooks=%u arena=%u mode=%u pause=%u top=%u active=%u wide=%u reason=%s\n",
-            native_reused,battle_hook_calls,s.arena,s.mode,s.pause,battle.top_end(),unsigned(battle.active()),unsigned(wide_ready),battle.decline_reason());
+            completed_frames,battle_hook_calls,s.arena,s.mode,s.pause,battle.top_end(),unsigned(battle.active()),unsigned(wide_ready),battle.decline_reason());
     }
-    if (native_reused%60==0)
-        std::fprintf(stderr,"[sc3:custom] incomplete=%u native_reused=%u\n",incomplete,native_reused);
-    if (host_width>240 && native_reused%60==0)
+    if(complete_frame_ready) ++complete_frames; else ++native_reused;
+    if (completed_frames%60==0)
+        std::fprintf(stderr,"[sc3:custom] incomplete=%u native_reused=%u complete_frames=%u\n",incomplete,native_reused,complete_frames);
+    if (host_width>240 && completed_frames%60==0)
         std::fprintf(stderr,"[sc3:host] width=%u lake=%u fallback=%u guest=240 reason=%s\n",host_width,lake_frames,fallback_frames,lake.decline_reason());
-    if(host_width>240 && native_reused%60==0)
+    if(host_width>240 && completed_frames%60==0)
         std::fprintf(stderr,"[sc3:battle] frames=%u reason=%s\n",battle_frames,battle.decline_reason());
     capture->reset();
 }
@@ -193,6 +209,7 @@ void configure_swordcraft3_custom_renderer(gbarecomp::RunOptions& opts) {
         if(end!=width && *end=='\0' && parsed>240 && parsed<=384) host_width=unsigned(parsed);
     }
     incomplete=lake_frames=battle_frames=fallback_frames=native_reused=battle_hook_calls=0;
+    completed_frames=complete_frames=0;
     const char* trace=std::getenv("SWORDCRAFT3_STATE_TRACE");
     state_trace=trace && !std::strcmp(trace,"1");
     std::fprintf(stderr,"[sc3:custom] game-state battle hook; native replay/visual checks removed\n");

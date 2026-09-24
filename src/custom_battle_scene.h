@@ -7,6 +7,7 @@
 #include "custom_field_objects.h"
 #include "custom_battle_identity.h"
 #include "custom_battle_spell_window.h"
+#include "combat_frame_renderer.h"
 #include "runtime.h"
 #include <cstring>
 #include <cstdlib>
@@ -21,6 +22,8 @@ class CustomBattleScene {
     BattleState state_{};
     unsigned top_end_=19;
     bool window_trace_=false;
+    bool full_frame_=false;
+    CombatRenderStats render_stats_{};
     std::array<BattleSpellWindow,160> spell_windows_{};
     mutable std::array<unsigned,160> effect_left_samples_{},effect_right_samples_{};
     static unsigned u16(const std::uint8_t* p) { return gba::text_u16(p); }
@@ -165,6 +168,8 @@ public:
     bool active() const { return active_; }
     const BattleState& state() const { return state_; }
     unsigned top_end() const { return top_end_; }
+    bool full_frame() const { return full_frame_; }
+    const CombatRenderStats& render_stats() const { return render_stats_; }
     void capture(const gbarecomp::ExtendedViewFrameInfo& m,const BattleState& state,bool owned) {
         reset();
         const char* trace=std::getenv("SWORDCRAFT3_BATTLE_WINDOW_TRACE");
@@ -187,6 +192,7 @@ public:
     }
     bool draw(const gba::GbaRasterCapture& raster,const std::uint8_t* native,
               std::uint8_t* output,unsigned width) {
+        full_frame_=false; render_stats_={};
         if(window_trace_) { effect_left_samples_.fill(0); effect_right_samples_.fill(0); }
         if(!active_ || !raster.complete() || width<=240 || width>384) return false;
         const auto& first=*raster.line(0);
@@ -221,6 +227,12 @@ public:
         const auto& gameplay=*raster.line(60);
         effect_span_=(gameplay.dispcnt&7)==0 ? span(gameplay.vram.data(),u16(gameplay.io.data()+12)) : 0;
         const auto policy=view_policy();
+        const char* full=std::getenv("SWORDCRAFT3_FULL_COMBAT_RENDERER");
+        if(full && !std::strcmp(full,"1")) {
+            full_frame_=CombatFrameRenderer::draw(raster,output,width,policy,render_stats_);
+            decline_=full_frame_?"none":"full-compositor-unsupported";
+            return full_frame_;
+        }
         if(!raster.draw_view(output,std::size_t(width)*160*3,width,policy)) return false;
         const unsigned left=(width-240)/2;
         for(unsigned y=0;y<160;++y) {

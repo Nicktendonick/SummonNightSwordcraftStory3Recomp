@@ -1,4 +1,4 @@
-param([switch]$CheckOnly, [ValidateSet(240,284,320,384)][int]$HostWidth=240)
+param([switch]$CheckOnly, [switch]$IsolateFullCombat, [ValidateSet(240,284,320,384)][int]$HostWidth=240)
 $ErrorActionPreference = 'Stop'
 $labRoot = Split-Path -Parent $PSScriptRoot
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $labRoot '../..'))
@@ -11,7 +11,30 @@ foreach ($file in @($exe,$rom,$bios,$config)) {
 }
 if ($CheckOnly) { Write-Host "Renderer lab paths verified ($HostWidth pixel host); nothing launched."; exit 0 }
 $playtest = Join-Path $labRoot 'build-native/playtest'
+if ($IsolateFullCombat) { $playtest = Join-Path $labRoot 'build-native/full-combat-playtest' }
 New-Item -ItemType Directory -Path $playtest -Force | Out-Null
+if ($IsolateFullCombat) {
+    # The runtime locates state slots beside the ROM, not the battery file.
+    # A private ROM copy therefore isolates both slot writes and battery saves.
+    $privateRom = Join-Path $playtest 'swordcraft3_beta.gba'
+    if (!(Test-Path -LiteralPath $privateRom)) {
+        Copy-Item -LiteralPath $rom -Destination $privateRom
+        for ($slot = 1; $slot -le 10; $slot++) {
+            $sourceSlot = [IO.Path]::ChangeExtension($rom, ".state$slot")
+            $privateSlot = [IO.Path]::ChangeExtension($privateRom, ".state$slot")
+            if ((Test-Path -LiteralPath $sourceSlot) -and !(Test-Path -LiteralPath $privateSlot)) {
+                Copy-Item -LiteralPath $sourceSlot -Destination $privateSlot
+            }
+        }
+        $acceptedSave = Join-Path $projectRoot 'experiments/custom-renderer/build-native/playtest/native-renderer.eep'
+        $privateSave = Join-Path $playtest 'native-renderer.eep'
+        if ((Test-Path -LiteralPath $acceptedSave) -and !(Test-Path -LiteralPath $privateSave)) {
+            Copy-Item -LiteralPath $acceptedSave -Destination $privateSave
+        }
+    }
+    $rom = $privateRom
+    Write-Host 'Full-frame test: battery save and ten save-state slots are isolated copies.'
+}
 $saved = @{}
 foreach ($key in @('PATH','SWORDCRAFT3_CUSTOM_RENDERER','SWORDCRAFT3_CUSTOM_HOST_WIDTH','SWORDCRAFT3_LAKE_EDGE_DATA','SWORDCRAFT3_LAKE_CAMERA_LIMITS',
                   'GBARECOMP_VISIBLE_DEBUGGER','GBARECOMP_DEBUG_CAPTURE_DIR','GBARECOMP_INPUT_RECORD',
