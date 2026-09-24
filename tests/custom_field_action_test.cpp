@@ -13,6 +13,7 @@ constexpr unsigned action_stride = 0x1c;
 constexpr unsigned action_count = 8;
 constexpr unsigned tool_offset = 0x1eb8 + 0xf;
 constexpr std::uint32_t tool_callback = 0x0809da99;
+constexpr std::uint32_t selection_callback = 0x0809d859;
 constexpr std::uint32_t bow_callback = 0x0809e3ed;
 constexpr std::uint32_t object_callback = 0x080a0ad1;
 
@@ -87,11 +88,25 @@ int main() {
                 fixture.tool(tool);
                 fixture.action(slot, tool_callback, state);
                 expect("ordinary tool action at each state and slot", fixture, true);
+                fixture.action(slot, selection_callback, state);
+                expect("field selection at each tool, state and slot", fixture, true);
+                fixture.flags(0x1004);
+                expect("foreground script overrides field selection", fixture, false);
             }
         }
     }
 
     Fixture fixture;
+    for (unsigned state : {2u, 3u, 0xffffu}) {
+        fixture = Fixture{};
+        fixture.action(0, selection_callback, state);
+        expect("unknown field selection substate", fixture, false);
+    }
+    fixture = Fixture{};
+    fixture.action(0, selection_callback, 1);
+    fixture.action(7, 0x0809b849, 0);
+    expect("concurrent arbitrary-event action overrides field selection", fixture, false);
+    fixture = Fixture{};
     expect("no active action is not a tool-owned lock", fixture, false);
     fixture.action();
     expect("tool-owned lock", fixture, true);

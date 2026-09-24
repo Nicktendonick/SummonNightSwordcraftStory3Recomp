@@ -19,11 +19,17 @@ gbarecomp::ExtendedViewFrameInfo memory{};
 swordcraft3::CustomFieldScene lake;
 swordcraft3::CustomBattleScene battle;
 swordcraft3::BattleStateTracker battle_state;
+swordcraft3::BattleSpellDisplayEpoch spell_display_epoch;
 void (*previous_entry_hook)(std::uint32_t)=nullptr;
 bool battle_hook_supported=false, state_trace=false;
+bool battle_spell_window_supported=false;
 unsigned battle_hook_calls=0;
 void battle_entry(std::uint32_t pc) {
     if(previous_entry_hook) previous_entry_hook(pc);
+    if(pc==0x080044e4 && battle_spell_window_supported) {
+        spell_display_epoch.publish(memory.iwram,memory.iwram_size,memory.ewram,memory.ewram_size);
+        return;
+    }
     if(pc==0x0805e780 && battle_hook_supported) {
         // Results-panel initialization in sub_0805BC10 retires the arena's
         // VCOUNT schedule before the outer lifecycle reaches teardown.
@@ -107,6 +113,7 @@ int field_object_limit(std::uint32_t pc,std::uint32_t original,std::uint32_t* va
 }
 void reset_host() {
     wide_ready=false; lake.reset(); battle.reset(); battle_state.reset();
+    spell_display_epoch.reset();
     if(capture) capture->reset();
 }
 void observe(const gba::NativeRasterLineContext& line) {
@@ -115,6 +122,7 @@ void observe(const gba::NativeRasterLineContext& line) {
         const bool owned=battle_state.latch(memory.iwram,memory.iwram_size,state);
         lake.capture(memory); battle.capture(memory,state,owned);
     }
+    battle.capture_spell_window(line,memory,battle_spell_window_supported,spell_display_epoch);
     capture->capture(line);
 }
 bool draw_host(const gbarecomp::HostFrameContext& frame) {
@@ -134,11 +142,12 @@ void present(std::uint8_t* stock, std::size_t bytes) {
     if(host_width>240) {
         wide_output.assign(std::size_t(host_width)*160*3,0);
         wide_ready=lake.draw(*capture,wide_output.data(),host_width);
-        if(state_trace) std::fprintf(stderr,"[sc3:field-frame] completed=%u valid=%u wide=%u decodes=%u scene=%s reason=%s\n",
-            native_reused,unsigned(lake.valid()),unsigned(wide_ready),lake.source_decodes(),lake.scene_name(),lake.decline_reason());
+        if(state_trace) std::fprintf(stderr,"[sc3:field-frame] completed=%u valid=%u wide=%u decodes=%u animations=%u scene=%s reason=%s\n",
+            native_reused,unsigned(lake.valid()),unsigned(wide_ready),lake.source_decodes(),lake.animation_decodes(),lake.scene_name(),lake.decline_reason());
         if(wide_ready) ++lake_frames;
         else {
             wide_ready=battle.draw(*capture,output.data(),wide_output.data(),host_width);
+            battle.trace_raster(*capture,native_reused);
             if(wide_ready) ++battle_frames; else ++fallback_frames;
         }
         if(!wide_ready && std::getenv("SWORDCRAFT3_CUSTOM_AUDIT"))
@@ -162,6 +171,7 @@ void initialize(const gbarecomp::ExtendedViewFrameInfo* frame) {
     if(g_runtime_fn_entry_hook!=battle_entry) {
         previous_entry_hook=g_runtime_fn_entry_hook;
         battle_hook_supported=swordcraft3::battle_hook_rom_supported(memory.rom,memory.rom_size);
+        battle_spell_window_supported=swordcraft3::battle_spell_window_rom_supported(memory.rom,memory.rom_size);
         g_runtime_fn_entry_hook=battle_entry;
         if(state_trace) std::fprintf(stderr,"[sc3:state-hook] installed supported=%u\n",unsigned(battle_hook_supported));
     }

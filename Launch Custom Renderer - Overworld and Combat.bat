@@ -5,8 +5,8 @@ echo Custom rendering - overworld and combat - 12:5
 echo.
 echo Includes five verified field maps and battle arenas 0, 2, 3 and 7.
 if /I "%~1"=="--general-fields" (
-echo EXPERIMENT: other compatible static field maps use ROM-backed source authentication.
-echo Unfamiliar animation/layer formats and unsupported arenas remain native.
+echo EXPERIMENT: compatible field maps and regular animations use ROM-backed source authentication.
+echo Unsupported layer formats, scripted animations and unsupported arenas remain native.
 ) else (
 echo Other maps and arenas remain native until support is added.
 )

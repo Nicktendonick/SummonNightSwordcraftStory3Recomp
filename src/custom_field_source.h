@@ -78,7 +78,7 @@ struct FieldSourceMap {
 // ROM decompression occurs only on key changes. Loaded sources are compared
 // each capture so same-address RAM mutations cannot silently reuse the cache.
 class FieldSourceCache {
-    std::array<std::uint32_t,5> key_{};
+    std::array<std::uint32_t,8> key_{};
     const std::uint8_t* rom_=nullptr;
     std::size_t rom_size_=0;
     bool attempted_=false,decoded_=false;
@@ -90,10 +90,11 @@ public:
     bool matches_key(FieldBytes e,FieldBytes i,const FieldOwner& owner) const {
         return attempted_ && key_==key(e,i,owner);
     }
-    static std::array<std::uint32_t,5> key(FieldBytes e,FieldBytes i,const FieldOwner& owner) {
+    static std::array<std::uint32_t,8> key(FieldBytes e,FieldBytes i,const FieldOwner& owner) {
         const auto* f=e.data()+owner.pointer-0x02000000;
         return {owner.pointer,field32(i.data()+0x2974),field16(f+0x4fc),
-                field16(f+0x528),field16(f+0x554)};
+                field16(f+0x528),field16(f+0x554),field16(f+0x4fe),
+                field16(f+0x52a),field16(f+0x556)};
     }
     bool capture(FieldBytes e,FieldBytes i,FieldBytes rom,const FieldOwner& owner) {
         const auto next=key(e,i,owner);

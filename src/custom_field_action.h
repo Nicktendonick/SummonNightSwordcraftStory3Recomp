@@ -21,6 +21,12 @@ inline bool field_tool_action(FieldBytes e,const FieldOwner& owner) {
         if(!((set|clear)&0x1005)) continue; // Passive actions do not own this lock.
         if(active!=1 || set!=0x1000 || clear!=1) return false;
         switch(field32(action+0x18)) {
+        case 0x0809d859: // 080A4BEC: L/R field-tool selection animation.
+            // 0809D858 states 0/1 own this same temporary input lock, including
+            // repeated selection changes. A tool strike hands off to its own
+            // action; this does not grant permission to foreground scripts.
+            if(field16(action)>1) return false;
+            break;
         case 0x0809da99: // 080A4C3C: ordinary tool animation, all seven selections.
             if(field16(action)>1) return false;
             break;

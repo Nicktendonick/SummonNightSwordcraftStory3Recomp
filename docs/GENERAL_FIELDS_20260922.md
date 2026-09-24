@@ -1,5 +1,11 @@
 # Reversible general-field 12:5 experiment
 
+Update: [source-backed regular field animations](FIELD_ANIMATIONS_20260922.md)
+supersedes the known-profile animation restriction described in this historical
+baseline. The same general-field launcher now resolves regular placement frame
+counts/durations from each map's own ROM resources. It does not claim all rooms
+or scripted animations are supported.
+
 Follow-up: [field-tool framing correction](FIELD_TOOL_FRAMING_20260922.md) keeps
 authenticated tool actions wide during their temporary movement locks, without
 relaxing foreground-script cutscene framing. Its executable supersedes the build

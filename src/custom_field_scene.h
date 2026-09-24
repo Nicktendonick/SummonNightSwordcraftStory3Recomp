@@ -10,6 +10,7 @@
 #include "custom_field_events.h"
 #include "custom_field_objects.h"
 #include "custom_field_source.h"
+#include "custom_field_animation.h"
 #include "custom_field_action.h"
 #include <array>
 #include <cstring>
@@ -23,6 +24,7 @@ namespace swordcraft3 {
 class CustomFieldScene {
     const CustomFieldProfile* profile_=nullptr;
     FieldSourceCache sources_;
+    FieldAnimationCache animation_sources_;
     FieldOwner owner_{};
     const std::uint8_t* checked_rom_=nullptr;
     std::size_t checked_rom_size_=0;
@@ -140,8 +142,9 @@ public:
     }
     const char* decline_reason() const { return decline_; }
     unsigned source_decodes() const { return sources_.decodes; }
+    unsigned animation_decodes() const { return animation_sources_.decodes; }
     const char* scene_name() const { return profile_ ? profile_->name : "general-field"; }
-    void reset() { valid_=false; profile_=nullptr; owner_={}; sources_.reset(); }
+    void reset() { valid_=false; profile_=nullptr; owner_={}; sources_.reset(); animation_sources_.reset(); }
     bool capture(const gbarecomp::ExtendedViewFrameInfo& memory) {
         valid_=false; profile_=nullptr; decline_="field-owner"; animation_count_=0;
         if(!memory.iwram || !memory.ewram || !memory.rom) return false;
@@ -149,11 +152,11 @@ public:
             checked_rom_=memory.rom; checked_rom_size_=memory.rom_size;
             const auto hash=gba::sha1(memory.rom,memory.rom_size).hex();
             supported_rom_=hash=="3f5253fcf57e07ce52472bd29a61d16b98a12376" || hash=="bb2eebf98deb59bb6218442c2308bb5033ae2915";
-            sources_.reset();
+            sources_.reset(); animation_sources_.reset();
         }
         if(!supported_rom_) { decline_="field-rom-revision"; return false; }
         if(!read_field_owner({memory.ewram,memory.ewram_size},{memory.iwram,memory.iwram_size},owner_)) {
-            sources_.reset(); return false;
+            sources_.reset(); animation_sources_.reset(); return false;
         }
         const char* general=std::getenv("SWORDCRAFT3_CUSTOM_GENERAL_FIELDS");
         general_=general && !std::strcmp(general,"1");
@@ -180,6 +183,10 @@ public:
         if(profile_ && profile_->additional && additional && !std::strcmp(additional,"0")) {
             decline_="additional-area-disabled"; return false;
         }
+        if(general_ && !animation_sources_.capture({memory.ewram,memory.ewram_size},
+               {memory.iwram,memory.iwram_size},{memory.rom,memory.rom_size},owner_,sources_.maps)) {
+            decline_=animation_sources_.reason; return false;
+        }
         for(unsigned bg=1;bg<=3;++bg) {
             const auto* d=memory.iwram+0x2A20+bg*0x34;
             auto& l=layers_[bg-1];
@@ -191,11 +198,12 @@ public:
             const std::size_t off=source-0x02000000;
             if(off>memory.ewram_size || map_bytes>memory.ewram_size-off) return false;
             l.map.assign(memory.ewram+off,memory.ewram+off+map_bytes);
-            owners_[bg-1].assign(l.columns*l.rows,0);
+            if(general_) owners_[bg-1]=animation_sources_.owners[bg-1];
+            else owners_[bg-1].assign(l.columns*l.rows,0);
             if(!general_ && gba::sha1(l.map.data(),map_bytes).hex()!=profile_->hashes[bg-1]) return false;
             l.scroll_x=u16(d+8);l.scroll_y=u16(d+10);
             l.bias=u16(d+0x1A)+(unsigned(d[0x19])<<12);
-            for(unsigned phase=0;phase<4;++phase) {
+            if(!general_) for(unsigned phase=0;phase<4;++phase) {
                 phases_[phase][bg-1]=l;
                 if(!animate(phases_[phase][bg-1],d,memory,phase+1)) {
                     decline_="animation-descriptor"; return false;
@@ -235,7 +243,7 @@ public:
         // Authorize each placement independently. Static cells must still match
         // exactly, and all visible cells of an animation must agree on a phase.
         std::array<unsigned,32> allowed; allowed.fill(15);
-        layers_=phases_[0];
+        if(!general_) layers_=phases_[0];
         for(unsigned y=0;y<160;++y) {
             const auto& line=*capture.line(y); const auto* io=line.io.data();
             for(unsigned bg=1;bg<=3;++bg) {
@@ -253,6 +261,12 @@ public:
                         if(std::uint16_t(u16(l.map.data()+index*2)+l.bias)!=ring) {
                             decline_="static-source-ring-disagreement"; return false;
                         }
+                    } else if(general_) {
+                        const auto& a=animation_sources_.placements[owner-1];
+                        const unsigned cell=(index/l.columns-a.y)*a.w+(index%l.columns-a.x);
+                        if(!animation_sources_.phases[owner-1].constrain(ring,[&](unsigned frame) {
+                            return std::uint16_t(animation_sources_.entry(a,frame,cell)+l.bias);
+                        })) { decline_="animation-source-ring-disagreement"; return false; }
                     } else {
                         unsigned match=0;
                         for(unsigned p=0;p<4;++p)
@@ -269,7 +283,17 @@ public:
                 }
             }
         }
-        for(unsigned i=0;i<animation_count_;++i) {
+        if(general_) for(unsigned i=0;i<animation_sources_.placements.size();++i) {
+            const auto& a=animation_sources_.placements[i];
+            const unsigned frame=animation_sources_.phases[i].selected();
+            auto& l=layers_[a.bg-1];
+            for(unsigned y=0;y<a.h;++y) for(unsigned x=0;x<a.w;++x) {
+                const unsigned offset=((a.y+y)*l.columns+a.x+x)*2;
+                const auto value=animation_sources_.entry(a,frame,y*a.w+x);
+                l.map[offset]=std::uint8_t(value); l.map[offset+1]=std::uint8_t(value>>8);
+            }
+        }
+        else for(unsigned i=0;i<animation_count_;++i) {
             unsigned phase=0; while(!(allowed[i]&(1u<<phase))) ++phase;
             const auto& a=animations_[i];
             // Fully offscreen / visually ambiguous placements use the most
