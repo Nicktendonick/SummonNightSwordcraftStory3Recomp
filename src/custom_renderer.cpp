@@ -153,7 +153,16 @@ void present(std::uint8_t* stock, std::size_t bytes) {
         wide_ready=lake.draw(*capture,wide_output.data(),host_width);
         if(state_trace) std::fprintf(stderr,"[sc3:field-frame] completed=%u valid=%u wide=%u decodes=%u animations=%u scene=%s reason=%s\n",
             completed_frames,unsigned(lake.valid()),unsigned(wide_ready),lake.source_decodes(),lake.animation_decodes(),lake.scene_name(),lake.decline_reason());
-        if(wide_ready) ++lake_frames;
+        if(wide_ready) {
+            ++lake_frames;
+            complete_frame_ready=lake.full_frame();
+            if(state_trace) {
+                const auto& stats=lake.render_stats();
+                std::fprintf(stderr,"[sc3:field-composition] completed=%u complete_owner=%u rows=%u center=%u extended=%u center_objects=%u extended_objects=%u boundary_clips=%u\n",
+                    completed_frames,unsigned(complete_frame_ready),stats.rows,stats.center_columns,stats.extended_columns,
+                    stats.center_object_samples,stats.extended_object_samples,stats.boundary_clips);
+            }
+        }
         else {
             wide_ready=battle.draw(*capture,output.data(),wide_output.data(),host_width);
             complete_frame_ready=wide_ready && battle.full_frame();

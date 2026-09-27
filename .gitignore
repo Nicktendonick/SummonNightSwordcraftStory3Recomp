@@ -31,12 +31,28 @@ validation/
 *.log
 *.bmp
 *.png
+!assets/beta/beta-icon-source.png
+!assets/beta/boxart-clean.png
+!assets/beta/boxart-original.png
+!assets/beta/art-*.png
+!assets/beta/launcher-logo.png
+!assets/beta/launcher-village.png
 *.rgb
 recomp_cache/
 recomp_master_misses*.toml.frag
 recomp_coverage_*.json
 
 # Launcher state
+/Settings/
+/Saves/
+/Save States/
+/ROMs/
+/BIOS/
+/Mods/
+/Captures/
+/Logs/
+/Runtime/
+/release/
 bios.cfg
 rom.cfg
 config.ini

@@ -10,15 +10,18 @@ from validate_field_objects_tcp import ROOT, OWNER, png
 
 
 def run(state, out, custom, battles, width, count, repeats, replay_check=1, phase_profile=1,
-        screenshots=True, general_fields=0):
+        screenshots=True, general_fields=0, exe=None, full_field=0, full_combat=0):
     out.mkdir()
     env = os.environ.copy()
     for key in ('GBARECOMP_INPUT_REPLAY', 'GBARECOMP_INPUT_RECORD',
                 'GBARECOMP_VISIBLE_DEBUGGER', 'GBARECOMP_DEBUG_CAPTURE_DIR',
-                'GBARECOMP_SAMPLE', 'SWORDCRAFT3_CUSTOM_AUDIT'):
+                'GBARECOMP_SAMPLE', 'SWORDCRAFT3_CUSTOM_AUDIT', 'SWORDCRAFT3_STATE_TRACE',
+                'SWORDCRAFT3_BATTLE_WINDOW_TRACE', 'SWORDCRAFT3_CUSTOM_AUDIT_DETAIL'):
         env.pop(key, None)
     env.update(SWORDCRAFT3_CUSTOM_RENDERER=str(custom),
                SWORDCRAFT3_CUSTOM_GENERAL_FIELDS=str(general_fields),
+               SWORDCRAFT3_FULL_FIELD_RENDERER=str(full_field),
+               SWORDCRAFT3_FULL_COMBAT_RENDERER=str(full_combat),
                SWORDCRAFT3_CUSTOM_BATTLES=str(battles),
                SWORDCRAFT3_CUSTOM_OBJECTS='1', SWORDCRAFT3_CUSTOM_HOST_WIDTH=str(width),
                SWORDCRAFT3_CUSTOM_REPLAY_CHECK=str(replay_check),
@@ -27,7 +30,8 @@ def run(state, out, custom, battles, width, count, repeats, replay_check=1, phas
     with socket.socket() as probe:
         probe.bind(('127.0.0.1', 0))
         port = probe.getsockname()[1]
-    args = [str(ROOT/'build-native/Swordcraft3CustomRendererBeta.exe'), '--tcp', str(port),
+    executable = Path(exe) if exe else ROOT/'build-native/Swordcraft3CustomRendererBeta.exe'
+    args = [str(executable), '--tcp', str(port),
             '--bios', str(OWNER/'gbarecomp/bios/gba_bios.bin'),
             '--rom', str(OWNER/'build-beta/rom-patch-cache/swordcraft3_beta.gba'),
             '--save', str(out/'private.eep'), '--view-width', '240', str(ROOT/'native-test.toml')]
@@ -83,7 +87,8 @@ def run(state, out, custom, battles, width, count, repeats, replay_check=1, phas
                 process.terminate()
                 process.wait(timeout=10)
     return dict(custom=custom, battles=battles, width=width, replay_check=replay_check,
-                general_fields=general_fields, screenshots=screenshots,
+                general_fields=general_fields, full_field=full_field, full_combat=full_combat,
+                executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(), screenshots=screenshots,
                 phase_profile=phase_profile, frames_per_batch=count,
                 median_ms_per_frame=statistics.median(s['ms_per_frame'] for s in samples),
                 samples=samples, end_states=states)

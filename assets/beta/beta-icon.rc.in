@@ -1,0 +1,22 @@
+#include <windows.h>
+101 ICON "@SC3_BETA_ICON@"
+IDI_MAIN_ICON ICON "@SC3_BETA_ICON@"
+1 VERSIONINFO
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILETYPE VFT_APP
+BEGIN
+ BLOCK "StringFileInfo"
+ BEGIN
+  BLOCK "040904b0"
+  BEGIN
+   VALUE "FileDescription", "Swordcraft Story 3 - Beta Launcher\0"
+   VALUE "ProductName", "Summon Night: Swordcraft Story 3 PC Beta\0"
+   VALUE "FileVersion", "0.1.0 - Development Beta\0"
+  END
+ END
+ BLOCK "VarFileInfo"
+ BEGIN
+  VALUE "Translation", 0x409, 1200
+ END
+END

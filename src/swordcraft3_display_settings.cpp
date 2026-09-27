@@ -58,6 +58,8 @@ void configure_swordcraft3_display_settings(gbarecomp::RunOptions& opts,
         auto executable = std::filesystem::absolute(executable_path, error);
         if (!error) s_config = executable.parent_path() / "swordcraft3-display.ini";
     }
+    if (opts.data_root && *opts.data_root)
+        s_config = std::filesystem::path(opts.data_root) / "Settings/display.ini";
     std::ifstream file(s_config);
     std::string line;
     bool display_section = false;
