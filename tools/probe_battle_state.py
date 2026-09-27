@@ -47,6 +47,8 @@ def main():
     p.add_argument('--exe', type=Path, default=ROOT/'build-native/Swordcraft3CustomRendererBeta.exe')
     p.add_argument('--compact', action='store_true', help='Keep hashes/traces, not full per-frame RAM dumps')
     p.add_argument('--full-combat', action='store_true', help='Use the isolated complete-frame combat compositor')
+    p.add_argument('--full-field', action='store_true', help='Use complete-frame field composition')
+    p.add_argument('--restore-at', type=int, nargs='*', default=[], help='Reload the input state before these sequence indices')
     p.add_argument('--draw-audit', action='store_true', help='Retain IWRAM and OAM for source-bounded submission checks')
     p.add_argument('--field-audit', action='store_true', help='Record task-owned field state and endpoint map provenance; no images')
     p.add_argument('--tool-audit', action='store_true', help='Record field action ownership and object lifecycle metadata; no images')
@@ -72,6 +74,7 @@ def main():
                SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy')
     env['SWORDCRAFT3_CUSTOM_OBJECTS'] = '1' if a.objects == 'enabled' else '0'
     env['SWORDCRAFT3_FULL_COMBAT_RENDERER'] = '1' if a.full_combat else '0'
+    env['SWORDCRAFT3_FULL_FIELD_RENDERER'] = '1' if a.full_field else '0'
     env['SWORDCRAFT3_CUSTOM_GENERAL_FIELDS'] = '1' if a.general_fields else '0'
     env['SWORDCRAFT3_BATTLE_WINDOW_TRACE'] = '1' if a.window_audit else '0'
     with socket.socket() as s:
@@ -109,6 +112,8 @@ def main():
                     return r
                 call('savestate_load', path=str(state))
                 for i, key in enumerate(keys):
+                    if i in a.restore_at:
+                        call('savestate_load', path=str(state))
                     call('set_keyinput', value=key)
                     frame = call('step')['frame']
                     row = dict(index=i, frame=frame, key=key, hashes=call('state_hash'))
@@ -157,7 +162,7 @@ def main():
         executable=str(a.exe), executable_sha256=hashlib.sha256(a.exe.read_bytes()).hexdigest(),
         sequence=a.sequence, host_width=384, objects=a.objects, frames=len(records), field_audit=a.field_audit,
         general_fields=a.general_fields, tool_audit=a.tool_audit, window_audit=a.window_audit,
-        full_combat=a.full_combat)))
+        full_combat=a.full_combat, full_field=a.full_field, restore_at=a.restore_at)))
     print(f'State-only capture: {len(records)} frames at width 384; source unchanged; {out}', flush=True)
 
 

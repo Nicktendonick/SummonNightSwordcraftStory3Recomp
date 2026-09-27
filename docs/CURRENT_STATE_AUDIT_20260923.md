@@ -1,5 +1,11 @@
 # Current-state audit — 2026-09-23
 
+> Follow-up, 2026-09-24: an opt-in complete-frame field build now exists and passed
+> state/source regression checks, pending owner playtesting. See
+> [FULL_FRAME_FIELD_20260924.md](FULL_FRAME_FIELD_20260924.md) for launcher, exact
+> executable identities, evidence and limits. This audit below remains the prior
+> accepted checkpoint; do not read its field-migration agenda as unstarted work.
+
 ## Conclusion
 
 The owner-approved full-frame combat checkpoint exists, matches its recorded

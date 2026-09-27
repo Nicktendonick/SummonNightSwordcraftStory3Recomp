@@ -3,9 +3,37 @@ project(SummonNightSwordcraftStory3Recomp C CXX)
 
 include(CTest)
 
+# Preserve the supplied covers as PNG; recomp-ui fits the complete image.
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/assets/beta")
+foreach(sc3_art boxart-clean.png boxart-original.png
+    art-archer.png art-winter.png art-parchment.png art-crystal.png
+    art-glasses.png art-ensemble.png art-horizon.png art-beginnings.png
+    art-swordsmith.png launcher-logo.png launcher-village.png)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/beta/${sc3_art}")
+        configure_file("assets/beta/${sc3_art}" "assets/beta/${sc3_art}" COPYONLY)
+    endif()
+endforeach()
+
 set(CMAKE_C_STANDARD 11)
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/assets/fonts")
+foreach(sc3_font NotoSansJP-Regular.ttf NotoSansJP-OFL.txt)
+    configure_file("assets/fonts/${sc3_font}" "assets/fonts/${sc3_font}" COPYONLY)
+endforeach()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Game-owned local beta launcher branding; no generic engine/UI modifications.
+if(WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/beta/beta.ico")
+    enable_language(RC)
+    set(SC3_BETA_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/beta/beta.ico")
+    configure_file(assets/beta/beta-icon.rc.in "${CMAKE_BINARY_DIR}/beta-icon.rc" @ONLY)
+    add_executable(Swordcraft3BetaLauncher WIN32 src/beta_launcher_win.cpp "${CMAKE_BINARY_DIR}/beta-icon.rc")
+    set_target_properties(Swordcraft3BetaLauncher PROPERTIES OUTPUT_NAME "Swordcraft Story 3 Beta")
+    target_link_libraries(Swordcraft3BetaLauncher PRIVATE user32)
+    if(MINGW)
+        target_link_options(Swordcraft3BetaLauncher PRIVATE -municode -static -static-libgcc -static-libstdc++)
+    endif()
+endif()
 
 set(GBARECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/gbarecomp"
     CACHE PATH "Path to the gbarecomp platform core")
@@ -101,6 +129,31 @@ endif()
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
 
 if(BUILD_TESTING)
+    if(SWORDCRAFT3_RECOMP_UI)
+        add_executable(swordcraft3_runtime_menu_tests tests/runtime_menu_test.cpp)
+        target_include_directories(swordcraft3_runtime_menu_tests PRIVATE
+            src gbarecomp/src/runtime recomp-ui/src recomp-ui/src/common recomp-ui/src/third_party/imgui)
+        target_link_libraries(swordcraft3_runtime_menu_tests PRIVATE swordcraft3_launcher_ui)
+        add_test(NAME swordcraft3_runtime_menu_tests COMMAND swordcraft3_runtime_menu_tests)
+        add_executable(swordcraft3_portable_launcher_tests tests/portable_launcher_test.cpp)
+        target_include_directories(swordcraft3_portable_launcher_tests PRIVATE
+            gbarecomp/src/runtime recomp-ui/src recomp-ui/src/common)
+        target_link_libraries(swordcraft3_portable_launcher_tests PRIVATE swordcraft3_launcher_ui)
+        target_compile_definitions(swordcraft3_portable_launcher_tests PRIVATE RECOMP_LAUNCHER=1)
+        add_test(NAME swordcraft3_portable_launcher_tests COMMAND swordcraft3_portable_launcher_tests)
+        add_executable(swordcraft3_portable_input_tests tests/portable_runtime_input_test.cpp)
+        target_include_directories(swordcraft3_portable_input_tests PRIVATE recomp-ui/src)
+        target_link_libraries(swordcraft3_portable_input_tests PRIVATE
+            gbarecomp_runtime swordcraft3_launcher_ui)
+        add_test(NAME swordcraft3_portable_input_tests COMMAND swordcraft3_portable_input_tests)
+    endif()
+    add_executable(swordcraft3_beta_boxart_tests tests/beta_boxart_test.cpp)
+    target_include_directories(swordcraft3_beta_boxart_tests PRIVATE src)
+    add_test(NAME swordcraft3_beta_boxart_tests COMMAND swordcraft3_beta_boxart_tests)
+    add_executable(swordcraft3_field_frame_tests tests/field_frame_renderer_test.cpp)
+    target_include_directories(swordcraft3_field_frame_tests PRIVATE src)
+    target_link_libraries(swordcraft3_field_frame_tests PRIVATE gbarecomp_gba)
+    add_test(NAME swordcraft3_field_frame_tests COMMAND swordcraft3_field_frame_tests)
     add_executable(swordcraft3_combat_frame_tests tests/combat_frame_renderer_test.cpp)
     target_include_directories(swordcraft3_combat_frame_tests PRIVATE src)
     target_link_libraries(swordcraft3_combat_frame_tests PRIVATE gbarecomp_gba)
@@ -189,6 +242,9 @@ if(SC3_LAB_GUEST_OBJECT_DIR)
     add_executable(Swordcraft3CustomRendererBeta src/main.cpp src/custom_renderer.cpp
         src/adaptive_widescreen.cpp src/swordcraft3_true_map.cpp ${lab_objects} ${lab_shadow_sources})
     target_compile_definitions(Swordcraft3CustomRendererBeta PRIVATE SWORDCRAFT3_BETA_BUILD)
+    if(WIN32 AND EXISTS "${CMAKE_BINARY_DIR}/beta-icon.rc")
+        target_sources(Swordcraft3CustomRendererBeta PRIVATE "${CMAKE_BINARY_DIR}/beta-icon.rc")
+    endif()
     target_include_directories(Swordcraft3CustomRendererBeta PRIVATE src "${lab_shadow_dir}"
         "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba"
         "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug")

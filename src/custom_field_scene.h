@@ -12,6 +12,7 @@
 #include "custom_field_source.h"
 #include "custom_field_animation.h"
 #include "custom_field_action.h"
+#include "field_frame_renderer.h"
 #include <array>
 #include <cstring>
 #include <cstdio>
@@ -20,8 +21,11 @@
 namespace swordcraft3 {
 // Narrow, content-authenticated field scenes. No guest hooks, cached live map
 // pointers, invented decoration, wrapping or camera changes. Regular objects
-// are sampled from each immutable raster row; the native center is untouched.
+// are sampled from each immutable raster row. Complete-frame composition is
+// opt-in; the previous margin compositor remains available for rollback.
 class CustomFieldScene {
+    bool full_frame_=false;
+    FieldRenderStats render_stats_{};
     const CustomFieldProfile* profile_=nullptr;
     FieldSourceCache sources_;
     FieldAnimationCache animation_sources_;
@@ -123,6 +127,8 @@ class CustomFieldScene {
         return true;
     }
 public:
+    bool full_frame() const { return full_frame_; }
+    const FieldRenderStats& render_stats() const { return render_stats_; }
     bool valid() const { return valid_; }
     bool verified_ambient(const gbarecomp::ExtendedViewFrameInfo& memory,unsigned flags) const {
         if(!profile_ || std::strcmp(profile_->name,"village-chief-outdoors") ||
@@ -144,7 +150,7 @@ public:
     unsigned source_decodes() const { return sources_.decodes; }
     unsigned animation_decodes() const { return animation_sources_.decodes; }
     const char* scene_name() const { return profile_ ? profile_->name : "general-field"; }
-    void reset() { valid_=false; profile_=nullptr; owner_={}; sources_.reset(); animation_sources_.reset(); }
+    void reset() { valid_=false; full_frame_=false; render_stats_={}; profile_=nullptr; owner_={}; sources_.reset(); animation_sources_.reset(); }
     bool capture(const gbarecomp::ExtendedViewFrameInfo& memory) {
         valid_=false; profile_=nullptr; decline_="field-owner"; animation_count_=0;
         if(!memory.iwram || !memory.ewram || !memory.rom) return false;
@@ -236,6 +242,7 @@ public:
         return true;
     }
     bool draw(const gba::GbaRasterCapture& capture, std::uint8_t* output,unsigned width) {
+        full_frame_=false; render_stats_={};
         if(!valid_ || !capture.complete() || !output || width<=240 || width>480) return false;
         // Authorize the entire frame before touching the output. No striped
         // partial widening around dialogue, transitions or unsupported effects.
@@ -307,6 +314,32 @@ public:
         const int left=int(width-240)/2;
         const char* objects=std::getenv("SWORDCRAFT3_CUSTOM_OBJECTS");
         const bool draw_objects=!objects || std::strcmp(objects,"0");
+        const char* full=std::getenv("SWORDCRAFT3_FULL_FIELD_RENDERER");
+        if(full && !std::strcmp(full,"1")) {
+            // Resolve coarse/fine alignment once per layer/raster row, not
+            // again for every column. No guest state or source is cached
+            // across frames; animation reconciliation above still runs first.
+            struct RowSource { int x,y; unsigned cnt; };
+            std::array<std::array<RowSource,3>,160> rows;
+            for(unsigned y=0;y<160;++y) {
+                const auto* io=capture.line(y)->io.data();
+                for(unsigned bg=1;bg<=3;++bg) {
+                    const auto& l=layers_[bg-1];
+                    rows[y][bg-1]={align(l.scroll_x,u16(io+0x10+bg*4)),
+                        align(l.scroll_y,u16(io+0x12+bg*4))+int(y),u16(io+8+bg*2)};
+                }
+            }
+            full_frame_=FieldFrameRenderer::draw(capture,output,width,draw_objects,
+                [&](unsigned bg,int x,int y,const gba::GbaRasterCapture::Line& row) {
+                    const auto& source=rows[y][bg-1];
+                    const int wx=source.x+x,wy=source.y;
+                    std::uint16_t e=0;
+                    if(!entry(bg,wx,wy,e)) return gba::render::Texel{};
+                    return gba::render::text(row.vram.data(),source.cnt,wx,wy,true,e);
+                },render_stats_);
+            if(!full_frame_) decline_="field-compositor-unsupported";
+            return full_frame_;
+        }
         for(unsigned y=0;y<160;++y) {
             const auto& line=*capture.line(y);
             const auto* io=line.io.data();

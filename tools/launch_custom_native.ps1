@@ -1,14 +1,19 @@
-param([switch]$CheckOnly, [switch]$IsolateFullCombat, [ValidateSet(240,284,320,384)][int]$HostWidth=240)
+param([switch]$CheckOnly, [switch]$IsolateFullCombat, [switch]$AcceptedFullCombat, [switch]$PrePerformance, [ValidateSet(240,284,320,384)][int]$HostWidth=240)
 $ErrorActionPreference = 'Stop'
 $labRoot = Split-Path -Parent $PSScriptRoot
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $labRoot '../..'))
 $exe = Join-Path $labRoot 'build-native/Swordcraft3CustomRendererBeta.exe'
+if ($AcceptedFullCombat) { $exe = Join-Path $labRoot 'validation/full-field-20260924/accepted/Swordcraft3CustomRendererBeta.exe' }
+if ($PrePerformance) { $exe = Join-Path $labRoot 'validation/upstream-performance-20260924/before/Swordcraft3CustomRendererBeta.exe' }
 $rom = Join-Path $projectRoot 'build-beta/rom-patch-cache/swordcraft3_beta.gba'
 $bios = Join-Path $projectRoot 'gbarecomp/bios/gba_bios.bin'
 $config = Join-Path $labRoot 'native-test.toml'
 foreach ($file in @($exe,$rom,$bios,$config)) {
     if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing lab input: $file" }
 }
+$identity = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+Write-Host "Executable: $exe"
+Write-Host "Build SHA256: $identity"
 if ($CheckOnly) { Write-Host "Renderer lab paths verified ($HostWidth pixel host); nothing launched."; exit 0 }
 $playtest = Join-Path $labRoot 'build-native/playtest'
 if ($IsolateFullCombat) { $playtest = Join-Path $labRoot 'build-native/full-combat-playtest' }
@@ -61,11 +66,17 @@ try {
         $env:GBARECOMP_VISIBLE_DEBUGGER = '1'
         $env:GBARECOMP_DEBUG_CAPTURE_DIR = $captures
         $env:GBARECOMP_INPUT_RECORD = Join-Path $captures 'session-input.trace'
-        Write-Host "Custom renderer test: $HostWidth pixel display; the game still renders at 240x160."
+        Write-Host "Custom renderer test: $HostWidth x 160 display; guest coordinates remain 240 x 160."
+        if ($env:SWORDCRAFT3_FULL_FIELD_RENDERER -eq '1') {
+            Write-Host 'OVERWORLD: complete-frame custom composition; no native center pasted over it.'
+        } else { Write-Host 'OVERWORLD: accepted hybrid composition (native center plus custom margins).' }
+        if ($env:SWORDCRAFT3_FULL_COMBAT_RENDERER -eq '1') {
+            Write-Host 'COMBAT: complete-frame custom composition for supported arenas.'
+        }
         Write-Host 'Supported fields: lake, village-chief outdoors, village outdoors and the captured 888x312 and 632x616 maps. Dialogue keeps native framing.'
         if ($env:SWORDCRAFT3_CUSTOM_GENERAL_FIELDS -eq '1') {
-            Write-Host 'General-field experiment ON: compatible ROM-backed static maps can widen without a room allowlist.'
-            Write-Host 'Existing animated profiles remain supported; unfamiliar animations/layer modes fall back to native.'
+            Write-Host 'General fields ON: compatible ROM-backed maps and regular source-backed animations can widen without a room allowlist.'
+            Write-Host 'Unsupported scripted animations/layer modes retain native fallback.'
         }
         if ($env:SWORDCRAFT3_CUSTOM_ADDITIONAL_AREAS -eq '0') {
             Write-Host 'Previous-area comparison: the new 888x312 and 632x616 maps and battle arenas 2 and 7 are disabled.'

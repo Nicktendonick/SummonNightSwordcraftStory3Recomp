@@ -1,0 +1,132 @@
+TOOLS & OPEN-SOURCE PROJECTS
+
+Thank you to the authors and contributors of the tools, libraries and research projects that helped make this port possible.
+Select a website link to open it in your browser. No connection is needed to read this page.
+
+CORE TOOLS AND LIBRARIES
+
+gbarecomp - mstan and contributors
+Static recompilation and the Game Boy Advance runtime.
+https://github.com/mstan/gbarecomp
+
+recomp-ui - mstan and contributors
+The launcher and configuration interface.
+https://github.com/mstan/recomp-ui
+
+Ghidra - National Security Agency and contributors
+Disassembly, decompilation and analysis of game behavior.
+https://github.com/NationalSecurityAgency/ghidra
+
+GBA Ghidra Loader - pudii and contributors
+Importing Game Boy Advance ROMs into Ghidra.
+https://github.com/pudii/gba-ghidra-loader
+
+GhidraMCP - 13bm and contributors
+Connecting the project's analysis tools to Ghidra.
+https://github.com/13bm/GhidraMCP
+
+SDL (Simple DirectMedia Layer)
+Window management, audio and controller input. This build uses SDL2.
+https://github.com/libsdl-org/SDL
+
+Dear ImGui - Omar Cornut and contributors
+Drawing launcher and runtime user interfaces.
+https://github.com/ocornut/imgui
+
+DEVELOPMENT TOOLS
+
+MSYS2
+Windows build environment and toolchain packages.
+https://www.msys2.org/
+
+GCC (GNU Compiler Collection)
+C and C++ compilation.
+https://gcc.gnu.org/
+
+MinGW-w64
+Windows headers and runtime support for the compiler toolchain.
+https://www.mingw-w64.org/
+
+CMake
+Build configuration and test orchestration through CTest.
+https://cmake.org/
+
+Ninja
+Executing the generated build steps.
+https://ninja-build.org/
+
+Python
+Automation, analysis and validation scripts.
+https://www.python.org/
+
+PowerShell
+Windows build, launch, packaging and test scripts.
+https://github.com/PowerShell/PowerShell
+
+Git
+Source version control.
+https://git-scm.com/
+
+GitHub CLI
+Repository and publishing workflows.
+https://cli.github.com/
+
+Eclipse Temurin (Eclipse Adoptium)
+The project's Java runtime for Ghidra.
+https://adoptium.net/
+
+RESEARCH AND ARCHITECTURAL REFERENCES
+
+These projects informed research or design. Listing them here does not mean their entire implementations run inside this port.
+
+csm3 - jiangzhengwenjz and contributors
+Swordcraft Story 3 disassembly/decompilation research, symbols and game-behavior evidence.
+https://github.com/jiangzhengwenjz/csm3
+
+MinishCapRecomp - mstan and contributors
+Initial game-repository and launcher integration reference.
+https://github.com/mstan/MinishCapRecomp
+
+SuperMetroidRecomp - mstan and contributors
+Reference for custom-renderer architecture and full-frame ownership; not a drop-in SNES renderer inside this GBA game.
+https://github.com/mstan/SuperMetroidRecomp
+
+EmeraldRecomp - mstan and contributors
+Additional GBA rendering and object-visibility research.
+https://github.com/mstan/EmeraldRecomp
+
+SUPPORTING LIBRARIES AND FONTS
+
+stb - Sean Barrett and contributors
+Image and font helpers used by the UI stack.
+https://github.com/nothings/stb
+
+tinyfiledialogs
+Native file-selection dialogs.
+https://sourceforge.net/projects/tinyfiledialogs/
+
+toml++ - Mark Gillard and contributors
+TOML parsing in the toolchain.
+https://github.com/marzer/tomlplusplus
+
+Lato - Lukasz Dziedzic
+Launcher Latin text font.
+https://www.latofonts.com/
+
+Noto Sans JP
+Japanese text and names in the credits. Font and OFL license are included in Runtime/assets/fonts in the portable package.
+https://github.com/google/fonts/tree/main/ofl/notosansjp
+
+Noto Sans Symbols 2
+Launcher symbol fallback font.
+https://github.com/google/fonts/tree/main/ofl/notosanssymbols2
+
+OpenMoji
+Launcher emoji fallback font.
+https://openmoji.org/
+
+ABOUT THIS LIST
+
+This is an acknowledgment of confirmed tools and selected references, not an exhaustive dependency or license inventory. Individual authors retain their respective work; listing a project does not imply its endorsement of this port.
+Personal acknowledgments, AI assistance and translation-team thanks remain in the PC Port Credits panel.
+This editable text lives in Credits/tools-and-projects.txt beside the launcher. Reopen the launcher after editing it.

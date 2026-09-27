@@ -1,9 +1,39 @@
 # Summon Night: Swordcraft Story 3 Recomp
 
-Early PC static-recompilation scaffold for **Summon Night: Craft Sword
+Work-in-progress PC static-recompilation port of **Summon Night: Craft Sword
 Monogatari - Hajimari no Ishi** (Game Boy Advance, Japan), built with
 [`gbarecomp`](https://github.com/mstan/gbarecomp) and the
 [`recomp-ui`](https://github.com/mstan/recomp-ui) launcher.
+
+## Current beta checkpoint — September 26, 2026
+
+This branch contains the complete-frame custom renderer for supported overworld
+and combat scenes, the selective performance backport, and the native themed
+portable launcher. The launcher includes hybrid keyboard/gamepad controls, save
+management, translation-patch selection, rotating artwork, and editable credits.
+The themed Esc menu has separate Pause/Resume buttons, a remembered automatic
+menu-pause option, and confirmed Reset/Close actions.
+
+- [Current checkpoint and verification](docs/BETA_CHECKPOINT_20260926.md)
+- [Portable beta folders, setup, and controls](docs/PORTABLE_BETA.md)
+- [Launcher theme and customization](docs/LAUNCHER_THEME_20260926.md)
+- [Esc-menu behavior and safety](docs/ESC_MENU_20260926.md)
+- [Performance update scope and measured results](docs/UPSTREAM_PERFORMANCE_20260924.md)
+
+The local portable build starts with **Swordcraft Story 3 Beta.exe** inside its
+complete Portable Beta folder. This is a source checkpoint, not a downloadable
+binary release or a 1.0 claim. ROMs, BIOS, patches, saves, generated guest code,
+and local build outputs are excluded. The pinned engine/UI forks currently
+require access to their private repositories; the public game source alone is
+not a self-contained build or game package.
+
+## Historical bring-up documentation
+
+The remaining sections describe earlier scaffolding and experiments. Their old
+launcher paths, feature limitations, performance figures, and image-comparison
+methods do not describe the current portable beta. Use the current documents
+above for this branch; current verification uses state/source/input evidence,
+not screenshot or framebuffer assertions.
 
 For another developer taking over or reviewing the work, start with
 [docs/HANDOFF.md](docs/HANDOFF.md).
