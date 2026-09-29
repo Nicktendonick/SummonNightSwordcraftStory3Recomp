@@ -1,4 +1,5 @@
-param([Parameter(Mandatory=$true)][string]$Package, [string]$State = '')
+param([Parameter(Mandatory=$true)][string]$Package, [string]$State = '',
+      [ValidateSet('English','Japanese')][string]$Language = 'English')
 $ErrorActionPreference = 'Stop'
 $lab = Split-Path -Parent $PSScriptRoot
 $Package = [IO.Path]::GetFullPath($Package)
@@ -8,6 +9,10 @@ if (!$Package.StartsWith($validation + [IO.Path]::DirectorySeparatorChar, [Strin
 }
 $out = Join-Path $Package 'Logs/menu-tests'
 if ($State) { $out = Join-Path $Package 'Logs/menu-tests-state' }
+if ($Language -eq 'Japanese') {
+    if ($State) { throw 'Do not use an English save state to test Japanese.' }
+    $out = Join-Path $Package 'Logs/menu-tests-japanese'
+}
 New-Item -ItemType Directory -Path $out -Force | Out-Null
 $save = Join-Path $out 'menu-test.eep'
 if (!(Test-Path -LiteralPath $save)) {
@@ -29,7 +34,8 @@ foreach ($flag in @('CUSTOM_RENDERER','FULL_FIELD_RENDERER','FULL_COMBAT_RENDERE
 }
 $env:SWORDCRAFT3_CUSTOM_HOST_WIDTH = '384'
 $runtime = Join-Path $Package 'Runtime/Swordcraft3CustomRendererBeta.exe'
-$args = '--window --no-launcher --frames 240 --rom "' + (Join-Path $Package 'ROMs/test.gba') + '" --bios "' + (Join-Path $Package 'BIOS/test.bin') + '" --save "' + $save + '" "' + (Join-Path $Package 'Runtime/game.toml') + '"'
+$romFile = if ($Language -eq 'Japanese') { 'ROMs/swordcraft3_jp - Copy.gba' } else { 'ROMs/test.gba' }
+$args = '--window --no-launcher --frames 240 --rom "' + (Join-Path $Package $romFile) + '" --bios "' + (Join-Path $Package 'BIOS/test.bin') + '" --save "' + $save + '" "' + (Join-Path $Package 'Runtime/game.toml') + '"'
 if ($State) {
     Copy-Item -LiteralPath $State -Destination (Join-Path $out 'resume.state') -Force
     $args += ' --load-state "' + (Join-Path $out 'resume.state') + '"'

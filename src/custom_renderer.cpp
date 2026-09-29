@@ -119,6 +119,11 @@ void reset_host() {
     spell_display_epoch.reset();
     if(capture) capture->reset();
 }
+void change_host_width(std::uint16_t width) {
+    if (width != 240 && width != 284 && width != 384) return;
+    host_width = width;
+    reset_host();
+}
 void observe(const gba::NativeRasterLineContext& line) {
     if(line.y==0 && host_width>240) {
         swordcraft3::BattleState state;
@@ -234,4 +239,18 @@ void configure_swordcraft3_custom_renderer(gbarecomp::RunOptions& opts) {
     opts.host_presentation_width=std::uint16_t(host_width);
     opts.host_frame_renderer=host_width>240 ? draw_host : nullptr;
     opts.host_frame_reset=reset_host;
+    // Reuse the established 284-column 16:9 approximation at 160 rows. The
+    // wider scanout is still host-only; native guest PPU stays 240x160.
+    if (const char* portable = std::getenv("SWORDCRAFT3_BETA_LAUNCHER"); portable && !std::strcmp(portable,"1")) {
+        static const char* const labels[] = {"Original GBA (3:2)", "Widescreen (16:9)", "Ultrawide (12:5)"};
+        static const std::uint16_t widths[] = {240, 284, 384};
+        opts.launcher_aspect_labels = labels;
+        opts.launcher_aspect_view_widths = widths;
+        opts.launcher_num_aspects = 3;
+        opts.launcher_default_aspect = host_width == 384 ? 2 : host_width == 284 ? 1 : 0;
+        opts.launcher_aspects_host_only = true;
+        opts.launcher_expose_widescreen = true;
+        opts.host_frame_renderer = draw_host;
+        opts.host_frame_set_width = change_host_width;
+    }
 }

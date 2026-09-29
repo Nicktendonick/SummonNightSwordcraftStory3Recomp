@@ -136,5 +136,60 @@ int main() {
     prefs.load(path.parent_path(),true); // directory cannot be replaced by a file
     CHECK(!prefs.set_pause_on_open(false) && prefs.pause_on_open());
     CHECK(std::filesystem::is_directory(path.parent_path()));
+    const auto filters = path.parent_path() / "filter-reset.ini";
+    const std::vector<std::string> initial_reset = {"game.exe", "--rom", "space path/patch.gba",
+        "--bios", "bios.bin", "--save", "battery.eep", "--view-width", "384",
+        "--linear-filter", "0", "--sharp-filter", "0", "--smooth-filter", "0",
+        "--screen-effect", "off", "--screen-effect-strength", "35", "--no-launcher"};
+    const auto write_filters = [&](const std::string& contents) {
+        std::ofstream out(filters, std::ios::binary); out << contents; out.close(); CHECK(out.good());
+    };
+    auto refreshed = initial_reset;
+    CHECK(!swordcraft3::refresh_reset_presentation_arguments(refreshed, path.parent_path()/"missing-filters.ini"));
+    CHECK(refreshed == initial_reset);
+    for (const std::string& malformed : {
+        std::string("[Launcher]\nlinear_filter=1\n"), // old or incomplete file
+        std::string("[Launcher]\nlinear_filter=0\nsharp_filter=0\nsmooth_filter=1\nscreen_effect=3\nscreen_effect_strength=35\n"),
+        std::string("[Launcher]\nlinear_filter=1\nsharp_filter=0\nsmooth_filter=1\nscreen_effect=2\nscreen_effect_strength=35\n"),
+        std::string("[Launcher]\nlinear_filter=0\nsharp_filter=0\nsmooth_filter=1\nscreen_effect=2\nscreen_effect_strength=35oops\n"),
+        std::string("[Launcher]\nlinear_filter=0\nsharp_filter=0\nsmooth_filter=1\nscreen_effect=2\nscreen_effect_strength=-1\n"),
+        std::string("[Launcher]\nlinear_filter=0\nsharp_filter=0\nsmooth_filter=1\nscreen_effect=2\nscreen_effect_strength=101\n"),
+        std::string("[Launcher]\nlinear_filter=0\nsharp_filter=0\nsmooth_filter=1\nscreen_effect=2\nscreen_effect_strength=35\nscreen_effect=0\n"),
+        std::string("[Launcher]\nlinear_filter=0\nsharp_filter=0\nsmooth_filter=1\nscreen_effect=2\nscreen_effect_strength=35\n[broken\n")}) {
+        write_filters(malformed);
+        CHECK(!swordcraft3::refresh_reset_presentation_arguments(refreshed, filters));
+        CHECK(refreshed == initial_reset);
+    }
+    write_filters("\xef\xbb\xbf[Launcher]\r\nlinear_filter = 0\r\nsharp_filter = 0\r\n"
+                  "smooth_filter = 1 ; chosen during play\r\nscreen_effect = 2\r\nscreen_effect_strength = 61\r\n"
+                  "[Other]\r\nlinear_filter = 1\r\n");
+    CHECK(swordcraft3::refresh_reset_presentation_arguments(refreshed, filters));
+    CHECK(refreshed == std::vector<std::string>({"game.exe", "--rom", "space path/patch.gba",
+        "--bios", "bios.bin", "--save", "battery.eep", "--view-width", "384", "--no-launcher",
+        "--linear-filter", "0", "--sharp-filter", "0", "--smooth-filter", "1",
+        "--screen-effect", "crt", "--screen-effect-strength", "61"}));
+    // A subsequent reset must reread the settings changed in the reset child,
+    // not replay the first session's or first reset's presentation flags.
+    write_filters("[Launcher]\nlinear_filter=0\nsharp_filter=1\nsmooth_filter=0\n"
+                  "screen_effect=1\nscreen_effect_strength=20\n");
+    CHECK(swordcraft3::refresh_reset_presentation_arguments(refreshed, filters));
+    CHECK(refreshed == std::vector<std::string>({"game.exe", "--rom", "space path/patch.gba",
+        "--bios", "bios.bin", "--save", "battery.eep", "--view-width", "384", "--no-launcher",
+        "--linear-filter", "0", "--sharp-filter", "1", "--smooth-filter", "0",
+        "--screen-effect", "lcd", "--screen-effect-strength", "20"}));
+    const auto original_aspect_args = refreshed;
+    for (int index : {0, 1, 2, 1}) {
+        write_filters("[Launcher]\nhost_aspect_index=" + std::to_string(index) + "\n");
+        CHECK(swordcraft3::refresh_reset_host_aspect_arguments(refreshed, filters));
+        auto expected = original_aspect_args;
+        expected.insert(expected.end(), {"--host-aspect", std::to_string(index)});
+        CHECK(refreshed == expected);
+    }
+    const auto last_aspect_args = refreshed;
+    write_filters("[Launcher]\nhost_aspect_index=9\n");
+    CHECK(!swordcraft3::refresh_reset_host_aspect_arguments(refreshed, filters));
+    CHECK(refreshed == last_aspect_args);
+    std::cout << "PASS: reset refreshes valid host aspects without changing media, filters or guest view arguments\n";
+    std::cout << "PASS: reset refreshes only complete valid presentation settings, preserves media/other args, rereads later changes\n";
     std::cout << "PASS: action catalog, Cancel-first confirmations, repeats, disabled recheck, Resume, layout bounds, reset arguments\n";
 }

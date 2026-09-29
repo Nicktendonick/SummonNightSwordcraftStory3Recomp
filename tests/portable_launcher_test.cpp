@@ -1,4 +1,5 @@
 #include "launcher_seam.h"
+#include "presentation_preferences.h"
 #include "common/launcher_model.h"
 #include "common/launcher_theme.h"
 #include "common/sha1.h"
@@ -19,16 +20,276 @@ static std::string get(const fs::path& p) {
     std::ifstream f(p, std::ios::binary);
     return {std::istreambuf_iterator<char>(f), {}};
 }
+
+static void test_presentation_filters(const fs::path& root) {
+    using namespace gbarecomp_seam;
+    const auto ini = root / "Settings/filters.ini";
+    SeamConfig cfg;
+    CHECK(cfg.linear_filter == 0 && cfg.smooth_filter == 0);
+    CHECK(cfg.sharp_filter == -1); // unchanged host-default sentinel
+    CHECK(cfg.screen_kind == 0 && cfg.screen_effect == 0);
+    CHECK(cfg.screen_effect_strength == 35);
+    // Native Esc preferences preserve a UTF-8 BOM. The launcher must still
+    // recognize the first section instead of silently reverting its settings.
+    put(ini, "\xef\xbb\xbf[Launcher]\r\nlinear_filter = 0\r\nsharp_filter = 0\r\n"
+             "smooth_filter = 1\r\nscreen_effect = 2\r\nscreen_effect_strength = 61\r\nvolume = 73\r\n"
+             "[KeyMap]\r\nPause = Shift+P\r\n[Other]\r\nkeep = yes\r\n");
+    SeamConfig bom_loaded;
+    seam_config_load(ini.string(), &bom_loaded);
+    CHECK(bom_loaded.smooth_filter == 1 && bom_loaded.screen_effect == 2);
+    CHECK(bom_loaded.screen_effect_strength == 61 && bom_loaded.volume == 73);
+    CHECK(gbarecomp::save_presentation_preferences(ini, 2, 1, 28));
+    CHECK(get(ini).compare(0, 3, "\xef\xbb\xbf") == 0);
+    seam_config_load(ini.string(), &bom_loaded);
+    CHECK(!bom_loaded.linear_filter && bom_loaded.sharp_filter == 1 && !bom_loaded.smooth_filter);
+    CHECK(bom_loaded.screen_effect == 1 && bom_loaded.screen_effect_strength == 28);
+    CHECK(bom_loaded.volume == 73);
+    // Launcher writeback must recognize that same BOM header, replace its
+    // section only once, preserve the BOM, and retain unrelated settings.
+    seam_config_save(ini.string(), bom_loaded);
+    const auto bom_saved = get(ini);
+    CHECK(bom_saved.compare(0, 3, "\xef\xbb\xbf") == 0);
+    CHECK(bom_saved.find("Pause = Shift+P") != std::string::npos);
+    CHECK(bom_saved.find("keep = yes") != std::string::npos);
+    for (const char* unique : {"[Launcher]", "linear_filter =", "sharp_filter =",
+                               "smooth_filter =", "screen_effect =", "screen_effect_strength =", "volume ="}) {
+        const auto first = bom_saved.find(unique);
+        CHECK(first != std::string::npos);
+        CHECK(bom_saved.find(unique, first + 1) == std::string::npos);
+    }
+    SeamConfig bom_reopened;
+    seam_config_load(ini.string(), &bom_reopened);
+    CHECK(!bom_reopened.linear_filter && bom_reopened.sharp_filter == 1 && !bom_reopened.smooth_filter);
+    CHECK(bom_reopened.screen_effect == 1 && bom_reopened.screen_effect_strength == 28);
+    CHECK(bom_reopened.volume == 73);
+    // After the launcher has moved its section below the unrelated settings,
+    // the live writer must still produce a readable BOM-preserving snapshot.
+    CHECK(gbarecomp::save_presentation_preferences(ini, 3, 2, 62));
+    seam_config_load(ini.string(), &bom_reopened);
+    CHECK(bom_reopened.smooth_filter == 1 && !bom_reopened.linear_filter && !bom_reopened.sharp_filter);
+    CHECK(bom_reopened.screen_effect == 2 && bom_reopened.screen_effect_strength == 62);
+    CHECK(bom_reopened.volume == 73);
+    put(ini, "[Launcher]\nscale = 3\nscreen = raw\n");
+    seam_config_load(ini.string(), &cfg);
+    CHECK(cfg.linear_filter == 0 && cfg.smooth_filter == 0);
+    CHECK(cfg.screen_kind == 0 && cfg.screen_effect == 0);
+    CHECK(cfg.screen_effect_strength == 35);
+    put(ini, "[Launcher]\nlinear_filter = 1\nsharp_filter = 1\n");
+    seam_config_load(ini.string(), &cfg);
+    CHECK(cfg.linear_filter == 1 && cfg.sharp_filter == 0);
+    CHECK(cfg.smooth_filter == 0 && cfg.screen_effect == 0);
+
+    put(ini, "[Launcher]\nlinear_filter = 1\nsharp_filter = 1\n"
+             "smooth_filter = 1\nscreen_effect = 99\nscreen_effect_strength = -8\n");
+    seam_config_load(ini.string(), &cfg);
+    CHECK(cfg.linear_filter == 0 && cfg.sharp_filter == 0 && cfg.smooth_filter == 1);
+    CHECK(cfg.screen_effect == 0 && cfg.screen_effect_strength == 0);
+    put(ini, "[Launcher]\nsmooth_filter = -1\nscreen_effect = -1\n"
+             "screen_effect_strength = 500\n");
+    seam_config_load(ini.string(), &cfg);
+    CHECK(cfg.smooth_filter == 0 && cfg.screen_effect == 0);
+    CHECK(cfg.screen_effect_strength == 100);
+
+    auto m = std::make_unique<LauncherModel>();
+    RecompLauncherCGameInfo gi{};
+    launcher_profile_apply("gba", &gi);
+    RecompLauncherCSettings settings{};
+    set_extra_presentation_filters(settings, 0, 0, 35);
+    gi.default_settings = &settings;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    CHECK(!m->has_sharp_filter && !m->has_smooth_filter && !m->has_screen_effects);
+    launcher_model_cycle_scaling_filter(m.get());
+    launcher_model_set_scaling_filter(m.get(), 2);
+    launcher_model_set_scaling_filter(m.get(), 3);
+    launcher_model_set_screen_effect(m.get(), 2);
+    launcher_model_set_screen_effect_strength(m.get(), 80);
+    CHECK(!m->s.linear_filter && !m->s.sharp_filter && !m->s.smooth_filter);
+    CHECK(m->s.screen_effect == 0 && m->s.screen_effect_strength == 35);
+    launcher_model_toggle_filter(m.get());
+    CHECK(m->s.linear_filter == 1);
+    launcher_model_toggle_filter(m.get());
+    CHECK(m->s.linear_filter == 0);
+
+    gi.has_sharp_filter = 1;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    for (const char* label : {"Linear", "Sharp fractional", "Nearest"}) {
+        launcher_model_cycle_scaling_filter(m.get());
+        CHECK(std::string(launcher_model_scaling_filter_label(m.get())) == label);
+    }
+    gi.has_sharp_filter = 0; gi.has_smooth_filter = 1;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    for (const char* label : {"Linear", "Smooth 2x", "Nearest"}) {
+        launcher_model_cycle_scaling_filter(m.get());
+        CHECK(std::string(launcher_model_scaling_filter_label(m.get())) == label);
+    }
+    gi.has_sharp_filter = gi.has_screen_effects = 1;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    for (int expected : {1, 2, 3, 0, 1, 2, 3, 0}) {
+        launcher_model_cycle_scaling_filter(m.get());
+        CHECK(m->s.linear_filter == (expected == 1));
+        CHECK(m->s.sharp_filter == (expected == 2));
+        CHECK(m->s.smooth_filter == (expected == 3));
+    }
+    for (int chosen : {3, 1, 2, 0, 3}) {
+        launcher_model_set_scaling_filter(m.get(), chosen);
+        CHECK(m->s.linear_filter == (chosen == 1));
+        CHECK(m->s.sharp_filter == (chosen == 2));
+        CHECK(m->s.smooth_filter == (chosen == 3));
+    }
+    launcher_model_set_scaling_filter(m.get(), -1);
+    launcher_model_set_scaling_filter(m.get(), 4);
+    CHECK(m->s.smooth_filter == 1 && !m->s.linear_filter && !m->s.sharp_filter);
+    launcher_model_toggle_filter(m.get());
+    CHECK(m->s.linear_filter == 1 && !m->s.smooth_filter && !m->s.sharp_filter);
+    launcher_model_set_scaling_filter(m.get(), 3);
+    for (const char* label : {"LCD Grid", "CRT", "Off"}) {
+        launcher_model_cycle_screen_effect(m.get());
+        CHECK(std::string(launcher_model_screen_effect_label(m.get())) == label);
+        CHECK(m->s.smooth_filter == 1); // screen effects layer over any scaler
+    }
+    launcher_model_set_screen_effect(m.get(), -8);
+    CHECK(m->s.screen_effect == 0);
+    launcher_model_set_screen_effect_strength(m.get(), -8);
+    CHECK(m->s.screen_effect_strength == 0);
+    launcher_model_set_screen_effect_strength(m.get(), 108);
+    CHECK(m->s.screen_effect_strength == 100);
+    launcher_model_set_screen_effect(m.get(), 2);
+    launcher_model_set_screen_effect_strength(m.get(), 61);
+
+    RecompLauncherCSettings committed{};
+    launcher_model_commit(m.get(), &committed);
+    cfg = SeamConfig{};
+    cfg.linear_filter = committed.linear_filter;
+    cfg.sharp_filter = get_sharp_filter(committed, false);
+    get_extra_presentation_filters(committed, cfg.smooth_filter,
+                                   cfg.screen_effect, cfg.screen_effect_strength);
+    put(ini, "[KeyMap]\nPause = Shift+P\n[Other]\nkeep = yes\n");
+    seam_config_save(ini.string(), cfg);
+    SeamConfig reopened;
+    seam_config_load(ini.string(), &reopened);
+    CHECK(reopened.smooth_filter == 1 && reopened.screen_effect == 2);
+    CHECK(reopened.screen_effect_strength == 61);
+    CHECK(!reopened.linear_filter && !reopened.sharp_filter);
+    CHECK(get(ini).find("Pause = Shift+P") != std::string::npos);
+    CHECK(get(ini).find("keep = yes") != std::string::npos);
+    RecompLauncherCSettings reopen_settings{};
+    reopen_settings.linear_filter = reopened.linear_filter;
+    set_presentation_filters(reopen_settings, reopened.sharp_filter, false);
+    set_extra_presentation_filters(reopen_settings, reopened.smooth_filter,
+                                  reopened.screen_effect, reopened.screen_effect_strength);
+    launcher_model_init(m.get(), &reopen_settings, &gi, nullptr);
+    CHECK(std::string(launcher_model_scaling_filter_label(m.get())) == "Smooth 2x");
+    CHECK(std::string(launcher_model_screen_effect_label(m.get())) == "CRT");
+    CHECK(m->s.screen_effect_strength == 61);
+    launcher_model_restore_defaults(m.get());
+    CHECK(!m->s.linear_filter && !m->s.sharp_filter && !m->s.smooth_filter);
+    CHECK(m->s.screen_kind == 0 && m->s.screen_effect == 0);
+    CHECK(m->s.screen_effect_strength == 35);
+
+    // Malformed model snapshots cannot retain mutually exclusive scalers or
+    // out-of-range screen effects, even when not loaded through the seam.
+    reopen_settings.linear_filter = reopen_settings.sharp_filter = reopen_settings.smooth_filter = 1;
+    reopen_settings.screen_effect = 30; reopen_settings.screen_effect_strength = -20;
+    launcher_model_init(m.get(), &reopen_settings, &gi, nullptr);
+    CHECK(!m->s.linear_filter && !m->s.sharp_filter && m->s.smooth_filter);
+    CHECK(m->s.screen_effect == 0 && m->s.screen_effect_strength == 0);
+
+    gbarecomp::RunOptions opts;
+    std::vector<std::string> args;
+    seam_append_setting_args(args, reopened, opts);
+    for (const char* option : {"--smooth-filter", "--screen-effect", "--screen-effect-strength"})
+        CHECK(std::find(args.begin(), args.end(), option) == args.end());
+    opts.launcher_expose_sharp_filter = true;
+    opts.launcher_expose_smooth_filter = opts.launcher_expose_screen_effects = true;
+    const auto value = [](const std::vector<std::string>& av, const std::string& key) {
+        const auto pos = std::find(av.begin(), av.end(), key);
+        CHECK(pos != av.end() && pos + 1 != av.end());
+        return *(pos + 1);
+    };
+    for (int effect : {0, 1, 2}) {
+        args.clear(); reopened.screen_effect = effect;
+        seam_append_setting_args(args, reopened, opts);
+        CHECK(value(args, "--linear-filter") == "0");
+        CHECK(value(args, "--sharp-filter") == "0");
+        CHECK(value(args, "--smooth-filter") == "1");
+        CHECK(value(args, "--screen-effect") == screen_effect_token(effect));
+        CHECK(value(args, "--screen-effect-strength") == "61");
+        CHECK(value(args, "--screen") == "raw");
+    }
+    args.clear(); reopened.smooth_filter = 0; reopened.screen_effect = 99;
+    reopened.screen_effect_strength = 120;
+    seam_append_setting_args(args, reopened, opts);
+    CHECK(value(args, "--smooth-filter") == "0");
+    CHECK(value(args, "--screen-effect") == "off");
+    CHECK(value(args, "--screen-effect-strength") == "100");
+
+    // Host-only aspects must not widen guest PPU scanout or reuse a legacy
+    // hidden aspect_index=0 left in older portable installations.
+    static const char* labels[] = {"Original GBA (3:2)", "Widescreen (16:9)", "Ultrawide (12:5)"};
+    static const std::uint16_t widths[] = {240, 284, 384};
+    opts.launcher_aspects_host_only = true;
+    opts.launcher_expose_widescreen = true;
+    opts.launcher_aspect_labels = labels;
+    opts.launcher_aspect_view_widths = widths;
+    opts.launcher_num_aspects = 3;
+    opts.launcher_default_aspect = 2;
+    reopened.aspect_index = 0;
+    CHECK(reopened.host_aspect_index == -1);
+    args.clear(); seam_append_setting_args(args, reopened, opts);
+    CHECK(value(args, "--host-aspect") == "2");
+    CHECK(std::find(args.begin(), args.end(), "--view-width") == args.end());
+    for (int index : {0, 1, 2}) {
+        reopened.host_aspect_index = index;
+        seam_config_save(ini.string(), reopened);
+        SeamConfig restored;
+        seam_config_load(ini.string(), &restored);
+        CHECK(restored.host_aspect_index == index);
+        CHECK(gbarecomp::read_host_aspect_preference(ini, 3) == index);
+        args.clear(); seam_append_setting_args(args, restored, opts);
+        CHECK(value(args, "--host-aspect") == std::to_string(index));
+        CHECK(std::find(args.begin(), args.end(), "--view-width") == args.end());
+    }
+    opts.launcher_aspects_host_only = false;
+    args.clear(); seam_append_setting_args(args, reopened, opts);
+    CHECK(std::find(args.begin(), args.end(), "--host-aspect") == args.end());
+
+    // Additive seam helpers must also compile and safely no-op against an old
+    // consumer ABI; older hosts are not required to upgrade with the runtime.
+    struct LegacySettings {} legacy;
+    int old_smooth = 0, old_effect = 0, old_strength = 35;
+    set_extra_presentation_filters(legacy, 1, 2, 61);
+    get_extra_presentation_filters(legacy, old_smooth, old_effect, old_strength);
+    set_extra_presentation_filter_caps(legacy, true, true);
+    CHECK(old_smooth == 0 && old_effect == 0 && old_strength == 35);
+    std::cout << "PASS: presentation filters capability gates, scaler exclusivity, defaults, bounds, persistence and runtime arguments\n";
+}
+
 int main(int argc, char** argv) {
     const auto root = fs::current_path() / "validation/pt" /
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     const auto portable = root / "Portable Game";
     fs::create_directories(portable / "Settings");
+    test_presentation_filters(root / "Filter checks");
     put(root / "source/test.gba", "synthetic source, not a ROM");
     const auto imported = gbarecomp::portable_import(portable, "ROMs", root/"source/test.gba");
     CHECK(get(imported) == get(root/"source/test.gba"));
+    CHECK(imported.filename() == "test.gba");
     CHECK(gbarecomp::portable_import(portable, "ROMs", imported) == imported);
     CHECK(gbarecomp::portable_import(portable, "ROMs", root/"source/test.gba") == imported);
+    put(root/"other/test.gba", "different synthetic ROM");
+    const auto second = gbarecomp::portable_import(portable, "ROMs", root/"other/test.gba");
+    CHECK(second.filename() == "test (2).gba");
+    CHECK(get(second) == "different synthetic ROM");
+    CHECK(get(imported) == "synthetic source, not a ROM");
+    CHECK(gbarecomp::portable_import(portable, "ROMs", root/"other/test.gba") == second);
+    put(root/"source/English Beta Patch.bps", "synthetic patch");
+    CHECK(gbarecomp::portable_import(portable, "Mods", root/"source/English Beta Patch.bps").filename() == "English Beta Patch.bps");
+    put(root/"source/GBA BIOS.bin", "synthetic bios");
+    CHECK(gbarecomp::portable_import(portable, "BIOS", root/"source/GBA BIOS.bin").filename() == "GBA BIOS.bin");
+    put(portable/"ROMs/busy.gba.importing", "existing incomplete import");
+    put(root/"source/busy.gba", "new data");
+    CHECK(gbarecomp::portable_import(portable, "ROMs", root/"source/busy.gba").filename() == "busy (2).gba");
+    CHECK(get(portable/"ROMs/busy.gba.importing") == "existing incomplete import");
     const auto cache = portable/"Settings/rom.cfg";
     const auto ref = gbarecomp::portable_reference(imported, cache);
     CHECK(!fs::path(ref).is_absolute());
@@ -77,6 +338,48 @@ int main(int argc, char** argv) {
     gi.default_settings = &settings;
     launcher_model_init(m.get(), &settings, &gi, nullptr);
     CHECK(!m->sidebar_layout && !m->logo_path && !m->backdrop_path && !m->tagline);
+    // Real model/import bridge: filenames survive re-opening and older numeric
+    // names get labels ONLY after the existing identity checks pass.
+    gi.name = "Synthetic Game";
+    auto moved_string = moved.string();
+    gi.import_file_ctx = moved_string.data();
+    gi.import_file = [](void* ctx, const char* kind, const char* src,
+                        char* out, size_t cap, char*, size_t) -> int {
+        const auto path = gbarecomp::portable_import(static_cast<char*>(ctx), kind, src).string();
+        if (path.size() >= cap) return 0;
+        std::snprintf(out, cap, "%s", path.c_str()); return 1;
+    };
+    const std::string bytes = "synthetic source, not a ROM";
+    uint8_t digest[20]; char digest_hex[41];
+    recompui_sha1_compute(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(), digest);
+    recompui_sha1_hex(digest, digest_hex);
+    const char* synthetic_known[] = {digest_hex};
+    gi.known_sha1_hex = synthetic_known; gi.num_known_sha1 = 1;
+    launcher_model_init(m.get(), &settings, &gi, (root/"source/test.gba").string().c_str());
+    CHECK(std::string(m->rom_file) == "test.gba" && !m->rom_file_is_label);
+    const std::string remembered_path = m->rom_full;
+    launcher_model_init(m.get(), &settings, &gi, remembered_path.c_str());
+    CHECK(std::string(m->rom_file) == "test.gba");
+    std::uint64_t legacy_hash = 14695981039346656037ull;
+    for (unsigned char byte : bytes) legacy_hash = (legacy_hash ^ byte) * 1099511628211ull;
+    const auto legacy = moved/"ROMs"/(std::to_string(legacy_hash) + ".gba");
+    put(legacy, bytes);
+    gi.rom_patch_required_sha1 = "different target";
+    launcher_model_init(m.get(), &settings, &gi, legacy.string().c_str());
+    CHECK(m->rom_file_is_label && std::string(m->rom_file) == "Synthetic Game (source ROM)");
+    CHECK(fs::equivalent(m->rom_full, legacy) && get(legacy) == bytes);
+    gi.rom_patch_required_sha1 = digest_hex;
+    launcher_model_init(m.get(), &settings, &gi, legacy.string().c_str());
+    CHECK(m->rom_file_is_label && std::string(m->rom_file) == "Synthetic Game (patched ROM)");
+    synthetic_known[0] = "0000000000000000000000000000000000000000";
+    launcher_model_init(m.get(), &settings, &gi, legacy.string().c_str());
+    CHECK(!m->rom_file_is_label && !launcher_model_rom_verified(m.get()));
+    synthetic_known[0] = digest_hex;
+    put(moved/"ROMs/123456.gba", bytes);
+    launcher_model_init(m.get(), &settings, &gi, (moved/"ROMs/123456.gba").string().c_str());
+    CHECK(!m->rom_file_is_label && std::string(m->rom_file) == "123456.gba");
+    gi.import_file = nullptr; gi.import_file_ctx = nullptr;
+    gi.known_sha1_hex = nullptr; gi.num_known_sha1 = 0; gi.rom_patch_required_sha1 = nullptr;
     gi.theme = "storybook";
     gi.logo_path = "assets/test-logo.png";
     gi.backdrop_path = "assets/test-backdrop.png";
@@ -211,12 +514,59 @@ int main(int argc, char** argv) {
             throw std::runtime_error(m->rom_patch_status);
         CHECK(std::strcmp(m->rom_patch_prepared_sha1, known[1]) == 0);
         CHECK(fs::exists(m->rom_patch_prepared_path));
+        const std::string prepared = m->rom_patch_prepared_path;
+        // Dual-engine opt-in: stock is now launchable, without weakening the
+        // patch target gate. Import/Clear must follow the displayed language.
+        const auto jp_save = (moved / "Saves/japanese.eep").string();
+        const auto en_save = (moved / "Saves/battery.eep").string();
+        put(jp_save, "japan"); put(en_save, "english");
+        gi.rom_patch_allow_unpatched = 1;
+        gi.unpatched_label = "Japanese"; gi.patched_label = "English";
+        gi.sram_path = jp_save.c_str(); gi.patched_sram_path = en_save.c_str();
+        launcher_model_init(m.get(), &settings, &gi, argv[1]);
+        CHECK(launcher_model_can_launch(m.get()));
+        CHECK(std::strcmp(m->rom_variant_label, "Japanese") == 0);
+        CHECK(std::strcmp(m->sram_path, jp_save.c_str()) == 0);
+        CHECK(launcher_model_prepare_rom_patch(m.get()));
+        CHECK(!m->rom_patch_prepared_path[0]);
+        launcher_model_set_rom_patch(m.get(), argv[2]);
+        CHECK(std::strcmp(m->rom_variant_label, "English") == 0);
+        CHECK(std::strcmp(m->sram_path, en_save.c_str()) == 0);
+        launcher_model_toggle_rom_patch(m.get());
+        CHECK(launcher_model_can_launch(m.get()));
+        CHECK(std::strcmp(m->sram_path, jp_save.c_str()) == 0);
+        launcher_model_toggle_rom_patch(m.get());
+        CHECK(launcher_model_prepare_rom_patch(m.get()));
+        CHECK(std::strcmp(m->rom_patch_prepared_sha1, known[1]) == 0);
+        RecompLauncherCSettings selected_settings{};
+        launcher_model_commit(m.get(), &selected_settings);
+        CHECK(std::strcmp(selected_settings.selected_sram_path, en_save.c_str()) == 0);
+        m->has_default_settings = true;
+        m->default_settings.rom_patch_enabled = 0;
+        m->default_settings.rom_patch_path[0] = '\0';
+        launcher_model_restore_defaults(m.get());
+        CHECK(std::strcmp(m->sram_path, jp_save.c_str()) == 0);
+        CHECK(!m->rom_patch_prepared_path[0]);
+        CHECK(launcher_model_can_launch(m.get()));
+        launcher_model_clear_rom_patch(m.get());
+        CHECK(std::strcmp(m->sram_path, jp_save.c_str()) == 0);
+        // An already translated file stays English even when patching is off.
+        launcher_model_set_rom(m.get(), prepared.c_str());
+        CHECK(launcher_model_can_launch(m.get()));
+        CHECK(std::strcmp(m->sram_path, en_save.c_str()) == 0);
+        m->s.rom_patch_enabled = 1; m->s.rom_patch_path[0] = '\0';
+        CHECK(launcher_model_can_launch(m.get()));
+        CHECK(launcher_model_prepare_rom_patch(m.get()));
+        CHECK(!m->rom_patch_prepared_path[0]);
+        CHECK(get(jp_save) == "japan" && get(en_save) == "english");
+        launcher_model_clear_rom_patch(m.get());
+        launcher_model_set_rom(m.get(), argv[1]);
         // Valid IPS syntax but incompatible output must be rejected.
         const auto wrong = moved/"Mods/wrong.ips";
         put(wrong, std::string("PATCH\0\0\0\0\1XEOF", 14));
         launcher_model_set_rom_patch(m.get(), wrong.string().c_str());
         CHECK(!launcher_model_prepare_rom_patch(m.get()));
-        std::cout << "PASS: real beta BPS produces exact target; incompatible IPS rejected\n";
+        std::cout << "PASS: Japanese unpatched, optional exact English BPS, direct English, separate save banks, incompatible IPS rejected\n";
     }
     std::cout << "PASS: portable import/relocation, bindings, defaults, battery safety, patch target gates\n";
     return 0;

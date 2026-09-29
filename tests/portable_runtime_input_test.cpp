@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 #define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
 // No guest CPU is run by this host-input test.
 struct DispatchEntry { uint32_t addr; uint8_t thumb, resume; void (*fn)(void); };
@@ -91,12 +92,65 @@ int main() {
     window.set_audio_enabled(false); window.set_game_paused(false); CHECK(!window.audio_enabled());
     window.set_game_paused(true); window.set_audio_enabled(true); CHECK(window.audio_enabled());
     window.set_game_paused(false); CHECK(window.audio_enabled());
+    // Exercise actual presentation resources, not framebuffer/pixel assertions.
+    // The input buffer is synthetic; no guest execution or real player save.
+    std::vector<uint8_t> frame(384 * 160 * 3, 64);
+    CHECK(window.scaling_filter() == 0 && window.screen_effect() == 0);
+    CHECK(window.screen_effect_strength() == 35);
+    for (int width : {240, 384}) {
+        CHECK(window.set_surface_size(width, 160));
+        for (int scaling = 0; scaling < 4; ++scaling) {
+            window.set_scaling_filter(scaling);
+            CHECK(window.scaling_filter() == scaling);
+            CHECK(window.linear_filter() == (scaling == 1));
+            for (int effect = 0; effect < 3; ++effect) {
+                window.set_screen_effect(effect, 50);
+                CHECK(window.screen_effect() == effect && window.screen_effect_strength() == 50);
+                const auto before = window.filter_stats();
+                window.present(frame.data());
+                const auto after = window.filter_stats();
+                CHECK(after.frames == before.frames + 1);
+                CHECK(after.smooth_frames == before.smooth_frames + (scaling == 3));
+                CHECK(after.effect_frames == before.effect_frames + (effect != 0));
+                CHECK(after.fallback_frames == before.fallback_frames);
+            }
+        }
+    }
+    CHECK(window.set_surface_size(240, 160));
+    window.set_scaling_filter(2);
+    window.set_screen_effect(0, 35);
+    SDL_Window* test_window = SDL_GetWindowFromID(1);
+    CHECK(test_window);
+    SDL_SetWindowSize(test_window, 800, 600); // non-integer presentation scale
+    const auto before_sharp = window.filter_stats();
+    window.present(frame.data());
+    CHECK(window.filter_stats().sharp_frames == before_sharp.sharp_frames + 1);
+    window.set_screen_effect(2, 0);
+    const auto zero_strength = window.filter_stats();
+    window.present(frame.data());
+    CHECK(window.filter_stats().effect_frames == zero_strength.effect_frames);
+    window.set_linear_filter(true); CHECK(window.scaling_filter() == 1);
+    window.set_linear_filter(false); CHECK(window.scaling_filter() == 0);
+    recomp_runtime_ui_open(ui);
+    window.present(frame.data()); CHECK(recomp_runtime_ui_is_open(ui));
+    window.set_scaling_filter(3); window.set_screen_effect(1, 35);
+    for (Uint32 kind : {SDL_RENDER_TARGETS_RESET, SDL_RENDER_DEVICE_RESET}) {
+        SDL_Event reset{}; reset.type = kind;
+        CHECK(SDL_PushEvent(&reset) == 1); sample();
+        const auto before = window.filter_stats();
+        window.present(frame.data());
+        const auto after = window.filter_stats();
+        CHECK(after.smooth_frames == before.smooth_frames + 1);
+        CHECK(after.effect_frames == before.effect_frames + 1);
+        CHECK(after.fallback_frames == before.fallback_frames);
+        CHECK(recomp_runtime_ui_is_open(ui));
+    }
     window.set_runtime_ui(nullptr);
     recomp_runtime_ui_destroy(ui);
     window.close();
     SDL_JoystickClose(joystick);
     SDL_JoystickDetachVirtual(index);
     SDL_Quit();
-    std::cout << "PASS: runtime input config, controller remap/release, assist trigger, Esc/Guide navigation, keyboard/controller confirmation, pause/audio preference\n";
+    std::cout << "PASS: runtime input, menu/audio, 24 filter combinations, native/wide resize, fractional Sharp, zero strength, menu overlay\n";
     return 0;
 }

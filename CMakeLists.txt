@@ -129,6 +129,16 @@ endif()
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
 
 if(BUILD_TESTING)
+    add_executable(swordcraft3_presentation_preferences_tests tests/presentation_preferences_test.cpp)
+    target_include_directories(swordcraft3_presentation_preferences_tests PRIVATE gbarecomp/src/runtime)
+    add_test(NAME swordcraft3_presentation_preferences_tests COMMAND swordcraft3_presentation_preferences_tests)
+    add_executable(swordcraft3_presentation_filters_tests tests/presentation_filters_test.cpp gbarecomp/src/runtime/presentation_filters.cpp)
+    target_include_directories(swordcraft3_presentation_filters_tests PRIVATE gbarecomp/src)
+    add_test(NAME swordcraft3_presentation_filters_tests COMMAND swordcraft3_presentation_filters_tests)
+    add_executable(swordcraft3_portable_language_tests tests/portable_language_test.cpp)
+    target_include_directories(swordcraft3_portable_language_tests PRIVATE src "${GBARECOMP_ROOT}/src/gba")
+    target_link_libraries(swordcraft3_portable_language_tests PRIVATE gbarecomp_gba)
+    add_test(NAME swordcraft3_portable_language_tests COMMAND swordcraft3_portable_language_tests)
     if(SWORDCRAFT3_RECOMP_UI)
         add_executable(swordcraft3_runtime_menu_tests tests/runtime_menu_test.cpp)
         target_include_directories(swordcraft3_runtime_menu_tests PRIVATE
@@ -271,6 +281,51 @@ set(SWORDCRAFT3_BETA_BPS "" CACHE FILEPATH
 set(SWORDCRAFT3_STOCK_ROM
     "${CMAKE_CURRENT_SOURCE_DIR}/roms/swordcraft3_jp.gba" CACHE FILEPATH
     "Verified Japanese Swordcraft Story 3 ROM used for private code generation")
+
+# Portable Japanese engine: generate its own verified corpus, never reuse the
+# English translation's instructions. Generated files remain in the build tree.
+option(SWORDCRAFT3_PORTABLE_JAPANESE "Build the portable Japanese engine" OFF)
+if(SWORDCRAFT3_PORTABLE_JAPANESE)
+    set(sc3_jp_dir "${CMAKE_BINARY_DIR}/generated-japanese")
+    set(sc3_jp_sources "${sc3_jp_dir}/dispatch_table.cpp")
+    foreach(shard RANGE 0 31)
+        if(shard LESS 10)
+            set(padded "00${shard}")
+        else()
+            set(padded "0${shard}")
+        endif()
+        list(APPEND sc3_jp_sources "${sc3_jp_dir}/recompiled_${padded}.cpp")
+    endforeach()
+    add_custom_command(OUTPUT ${sc3_jp_sources} "${sc3_jp_dir}/recompiled.h"
+        COMMAND $<TARGET_FILE:gba_recompile> --rom "${SWORDCRAFT3_STOCK_ROM}"
+            --config "${CMAKE_CURRENT_SOURCE_DIR}/symbols/swordcraft3_jp.toml"
+            --symbols "${CMAKE_CURRENT_SOURCE_DIR}/symbols/imported_symbols.tsv"
+            --out "${sc3_jp_dir}"
+        DEPENDS gba_recompile "${SWORDCRAFT3_STOCK_ROM}"
+            symbols/swordcraft3_jp.toml symbols/imported_symbols.tsv VERBATIM)
+    add_library(swordcraft3_japanese_guest OBJECT ${sc3_jp_sources})
+    target_include_directories(swordcraft3_japanese_guest PRIVATE "${sc3_jp_dir}"
+        "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/armv4t"
+        "${GBARECOMP_ROOT}/src/gba")
+    if(MINGW)
+        # Private generated debug symbols are huge and aren't shipped.
+        target_compile_options(swordcraft3_japanese_guest PRIVATE -g0)
+    endif()
+    add_executable(Swordcraft3Japanese src/main.cpp src/custom_renderer.cpp
+        src/adaptive_widescreen.cpp src/swordcraft3_true_map.cpp
+        $<TARGET_OBJECTS:swordcraft3_japanese_guest>)
+    target_include_directories(Swordcraft3Japanese PRIVATE src
+        "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/armv4t"
+        "${GBARECOMP_ROOT}/src/gba" "${GBARECOMP_ROOT}/src/debug")
+    target_link_libraries(Swordcraft3Japanese PRIVATE swordcraft3_presentation
+        "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
+        gbarecomp_armv4t swordcraft3_launcher_ui "-Wl,--end-group")
+    if(WIN32)
+        target_sources(Swordcraft3Japanese PRIVATE "${CMAKE_BINARY_DIR}/beta-icon.rc")
+        target_link_options(Swordcraft3Japanese PRIVATE "-Wl,--stack,16777216")
+    endif()
+    gbarecomp_stage_mingw_runtime(Swordcraft3Japanese)
+endif()
 
 if(SWORDCRAFT3_BETA_BPS)
     if(NOT EXISTS "${SWORDCRAFT3_BETA_BPS}")
