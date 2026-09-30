@@ -1,6 +1,7 @@
 // Structural and memory-safety tests only: no image, framebuffer, or output
 // colour comparisons. Guest memory is not involved in presentation filters.
 #include "runtime/presentation_filters.h"
+#include "runtime/presentation_simd.h"
 
 #include <chrono>
 #include <climits>
@@ -92,6 +93,45 @@ private:
 
 int main() {
     using namespace gbarecomp::runtime;
+#if defined(GBARECOMP_PRESENTATION_SSE2)
+    // Exhaustive bounded integer identities, not framebuffer/image assertions.
+    // Check unsigned-byte distance/tuple reduction at all decision thresholds,
+    // including which tuple is selected; the fourth component is tested too.
+    using namespace presentation_simd;
+    for (unsigned a=0; a<256; ++a) for (unsigned b=0; b<256; ++b) {
+        const auto distance=byte_distance(_mm_set1_epi8(static_cast<char>(a)),
+                                          _mm_set1_epi8(static_cast<char>(b)));
+        for (int bound : {24,32,47,63})
+            require((_mm_movemask_epi8(within(distance,bound))==0xffff) ==
+                    (std::abs(int(a)-int(b))<=bound), "unsigned SIMD bounded distance");
+    }
+    for (int tuple=0; tuple<4; ++tuple) for (int component=0; component<4; ++component) {
+        alignas(16) std::uint8_t values[16]{};
+        values[tuple*4+component]=64;
+        const auto accepted=within(_mm_load_si128(reinterpret_cast<const __m128i*>(values)),63);
+        require(_mm_movemask_epi8(accepted)==(0xffff ^ (15 << (tuple*4))),
+                "tuple reduction never spills into a neighbouring lane");
+    }
+    // Mixed lane weights catch reciprocal/rounding broadcast or pack errors.
+    // Every numerator up to 16*255 is visited for every legal denominator.
+    for (int weight=12; weight<=16; ++weight) for (int sum=0; sum<=weight*255; ++sum) {
+        alignas(16) std::uint16_t sums[16];
+        alignas(16) std::uint8_t normalized[16];
+        alignas(16) std::uint32_t weights[4];
+        for (int tuple=0; tuple<4; ++tuple) {
+            weights[tuple]=12+(weight-12+tuple)%5;
+            for (int lane=0; lane<4; ++lane)
+                sums[tuple*4+lane]=(sum+lane*97)%(weights[tuple]*255+1);
+        }
+        const auto result=normalize(_mm_load_si128(reinterpret_cast<const __m128i*>(sums)),
+            _mm_load_si128(reinterpret_cast<const __m128i*>(sums+8)),
+            _mm_load_si128(reinterpret_cast<const __m128i*>(weights)));
+        _mm_store_si128(reinterpret_cast<__m128i*>(normalized),result);
+        for (int lane=0; lane<16; ++lane)
+            require(normalized[lane]==(sums[lane]+weights[lane/4]/2)/weights[lane/4],
+                    "SIMD integer normalization and lane mapping are exact");
+    }
+#endif
     require(valid_presentation_size(240, 160), "native extent supported");
     require(valid_presentation_size(384, 160), "widescreen extent supported");
     require(!valid_presentation_size(0, 160), "zero width rejected");
@@ -101,7 +141,11 @@ int main() {
 
     SmoothScaler scaler;
     for (const auto& dimensions : {std::pair{1, 1}, std::pair{1, 7}, std::pair{7, 1},
-                                 std::pair{240, 160}, std::pair{384, 160}}) {
+                                 std::pair{2, 3}, std::pair{3, 2}, std::pair{4, 1},
+                                 std::pair{5, 3}, std::pair{7, 9}, std::pair{8, 2},
+                                 std::pair{9, 7}, std::pair{239, 160}, std::pair{240, 160},
+                                 std::pair{284, 160}, std::pair{383, 160}, std::pair{384, 160},
+                                 std::pair{385, 161}}) {
         const int width = dimensions.first;
         const int height = dimensions.second;
         for (const bool align_end : {false, true}) {

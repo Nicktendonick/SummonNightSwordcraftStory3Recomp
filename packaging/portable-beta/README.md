@@ -67,7 +67,41 @@ Choose whether opening the menu automatically pauses play. Reset/Close ask for
 confirmation; unsaved progress can be lost. State compatibility across future
 builds is not guaranteed, so keep ordinary in-game saves too.
 
+## Optional dedicated Guard
+
+Open **Mods > Gameplay Mods > Hold Select to Guard** in the normal launcher.
+With it on, hold your mapped Select button during manual combat to guard and
+release it to stop, using the game's native Guard timing. Your selected R-slot
+ability is preserved. Select can still cancel existing auto-battle, but does not
+turn it on while this mod is enabled. Outside combat, Select is unchanged.
+Turn the option off for the original controls, including the auto-battle toggle.
+
+The choice saves immediately in **Settings/guard.ini**, applies when you press
+Play, and survives reopening, Reset Game and switching between Japanese and
+English. Fresh installations default to Off. No patch download or separate
+Guard Test launcher is needed. Change Select's keyboard/gamepad bindings in
+**Controls**. A save failure leaves the previous choice active and shows an error.
+
 ## Visual filters
+
+Start with **Graphics preset** in **Settings > Display** or **Esc > Graphics**.
+You do not need to configure each filter separately:
+
+| Preset | Look | Combination |
+| --- | --- | --- |
+| Original Pixels | Hard-edged pixels; simplest and lightest | Nearest, effects Off |
+| Clean & Crisp | Recommended starting point for resized windows | Sharp fractional, effects Off |
+| Soft & Smooth | Rounded edges; lettering may look softer | Smooth 2x, effects Off |
+| Handheld Grid | A light handheld-style pixel grid | Nearest, LCD Grid 25% |
+| Retro TV | Softened pixels with scanlines and edge shading | Linear, CRT 35% |
+
+These are filter recipes, not performance/quality tiers. They leave your
+aspect ratio, screen-colour model, window size, audio and controls unchanged.
+They do not force an exact hardware emulation. Your existing choices stay
+active until you choose a preset. Fine-tune the individual controls below it;
+the label automatically becomes **Custom** when the combination differs.
+Choosing a named preset again reapplies its recipe. Changes survive Reset Game
+and reopening the launcher. There is no extra preset file to manage.
 
 **Game aspect ratio** is available in **Settings > Display** and **Esc > Graphics**:
 Original GBA (3:2), Widescreen (16:9), or Ultrawide (12:5). Switch during play;
@@ -86,10 +120,16 @@ Scaling offers **Nearest**, **Linear**, **Sharp fractional**, and **Smooth 2x**.
 Screen effects offer **Off**, **LCD Grid**, and **CRT**, with adjustable intensity.
 The existing screen-colour presets can be combined with these options.
 
+**Screen model** is now available in both **Settings > Display** and
+**Esc > Graphics**: Raw, Unlit, Frontlit, Backlit and Classic. This changes game
+colours immediately, including while paused; launcher/Esc text stays unchanged.
+It is independent of scaling, effects, graphics presets and aspect ratio.
+The choice is saved in Settings/launcher.ini and survives Reset Game and
+reopening the launcher. If it cannot be saved, the previous model stays active.
+
 The original pixel look is still the default. Smooth 2x is a custom edge-aware
-filter, not xBRZ; it can soften lettering and is CPU-heavy. It may substantially
-lower FPS in widescreen combat (about 43-46 FPS versus 59 FPS with Nearest in a
-short development-PC test; original-width Smooth 2x stayed near 60 FPS). CRT is a
+filter, not xBRZ; it can soften lettering. Its CPU path is now optimized for
+widescreen combat; performance still depends on your hardware. CRT is a
 lightweight scanline/grille/vignette effect. Filters leave launcher/Esc text
 unfiltered and do not alter saves or game logic. Choices are kept in
 Settings/launcher.ini, including changes made before Reset Game.

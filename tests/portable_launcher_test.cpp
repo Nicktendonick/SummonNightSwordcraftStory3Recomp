@@ -4,6 +4,8 @@
 #include "common/launcher_theme.h"
 #include "common/sha1.h"
 #include "../src/beta_credits.h"
+#include "../src/guard_preferences.h"
+#include "../src/graphics_presets.h"
 #include <chrono>
 #include <memory>
 #include <iostream>
@@ -21,9 +23,146 @@ static std::string get(const fs::path& p) {
     return {std::istreambuf_iterator<char>(f), {}};
 }
 
+static void test_guard_mod(const fs::path& root) {
+    using swordcraft3::GuardPreferences;
+    fs::create_directories(root / "Settings");
+    GuardPreferences prefs;
+    prefs.load(root);
+    CHECK(!prefs.enabled && prefs.error.empty() && !fs::exists(prefs.path));
+    auto m = std::make_unique<LauncherModel>();
+    RecompLauncherCSettings settings{};
+    RecompLauncherCGameInfo gi{};
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    CHECK(!launcher_model_has_mods_view(m.get()));
+    CHECK(!launcher_model_set_builtin_mod(m.get(), 0, true));
+    RecompLauncherCBuiltinMod mod{"select-guard", "Hold Select to Guard", "Combat only",
+        &prefs, GuardPreferences::get, GuardPreferences::set, GuardPreferences::last_error};
+    gi.builtin_mods = &mod;
+    gi.builtin_mod_count = 1;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    CHECK(launcher_model_has_mods_view(m.get()));
+    CHECK(!launcher_model_set_builtin_mod(m.get(), -1, true));
+    CHECK(!launcher_model_set_builtin_mod(m.get(), 1, true));
+    CHECK(launcher_model_set_builtin_mod(m.get(), 0, true) && prefs.enabled);
+    GuardPreferences reopened;
+    reopened.load(root);
+    CHECK(reopened.enabled && reopened.error.empty());
+    CHECK(launcher_model_set_builtin_mod(m.get(), 0, false) && !prefs.enabled);
+    reopened.load(root);
+    CHECK(!reopened.enabled && reopened.error.empty());
+    // Preserve comments, BOM and unrelated sections; never reset other settings.
+    put(prefs.path, "\xef\xbb\xbf[Launcher] ; mods\r\nselect_guard = 1 # keep\r\nother = 7\r\n[Private]\r\nkeep = yes\r\n");
+    prefs.load(root);
+    CHECK(prefs.enabled && prefs.error.empty());
+    CHECK(launcher_model_set_builtin_mod(m.get(), 0, false));
+    reopened.load(root);
+    CHECK(!reopened.enabled && reopened.error.empty());
+    CHECK(get(prefs.path).find("# keep") != std::string::npos);
+    CHECK(get(prefs.path).find("keep = yes") != std::string::npos);
+    CHECK(get(prefs.path).compare(0, 3, "\xef\xbb\xbf") == 0);
+    for (const auto& text : {std::string("[Launcher]\nselect_guard = 2\n"),
+                            std::string("[Launcher]\nselect_guard = 1\nselect_guard = 0\n"),
+                            std::string(65537, 'x')}) {
+        put(prefs.path, text);
+        prefs.load(root);
+        CHECK(!prefs.enabled && !prefs.error.empty());
+        CHECK(!launcher_model_set_builtin_mod(m.get(), 0, true));
+        CHECK(!prefs.enabled && m->builtin_mod_status[0] && get(prefs.path) == text);
+    }
+    put(prefs.path, "[Launcher]\nselect_guard = 1\n");
+    prefs.load(root);
+    CHECK(prefs.enabled);
+    fs::permissions(prefs.path, fs::perms::owner_read, fs::perm_options::replace);
+    CHECK(!launcher_model_set_builtin_mod(m.get(), 0, false));
+    CHECK(prefs.enabled); // failed saves never lie about the active selection
+    fs::permissions(prefs.path, fs::perms::owner_write, fs::perm_options::add);
+    CHECK(launcher_model_set_builtin_mod(m.get(), 0, false));
+    std::cout << "PASS: built-in Mods visibility, on/off, restart persistence, strict parsing, failure safety\n";
+}
+
+static void test_graphics_presets(const fs::path& root) {
+    using namespace swordcraft3;
+    using namespace gbarecomp_seam;
+    auto m = std::make_unique<LauncherModel>();
+    RecompLauncherCGameInfo gi{};
+    launcher_profile_apply("gba", &gi);
+    RecompLauncherCSettings settings{};
+    settings.screen_effect_strength = 35;
+    settings.screen_kind = 4; settings.window_scale = 4; settings.fullscreen = 1;
+    settings.volume = 73;
+    gi.default_settings = &settings;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    CHECK(m->graphics_preset_count == 0);
+    CHECK(launcher_model_graphics_preset(m.get()) == -1);
+    gi.graphics_presets = graphics_presets; gi.graphics_preset_count = graphics_preset_count;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    CHECK(m->graphics_preset_count == 0); // recipes cannot advertise unsupported features
+    gi.has_sharp_filter = gi.has_smooth_filter = gi.has_screen_effects = 1;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    CHECK(m->graphics_preset_count == 5 && launcher_model_graphics_preset(m.get()) == 0);
+    const auto original = m->s;
+    const auto ini = root / "Settings/launcher.ini";
+    for (int i = 0; i < graphics_preset_count; ++i) {
+        const auto& p = graphics_presets[i];
+        CHECK(launcher_model_apply_graphics_preset(m.get(), i));
+        CHECK(launcher_model_graphics_preset(m.get()) == i);
+        CHECK(m->s.linear_filter == (p.scaling == 1));
+        CHECK(m->s.sharp_filter == (p.scaling == 2));
+        CHECK(m->s.smooth_filter == (p.scaling == 3));
+        CHECK(m->s.screen_effect == p.effect && m->s.screen_effect_strength == p.strength);
+        // Byte-for-byte model check with just the five recipe fields restored:
+        // no aspect, colour, window, audio, controls, paths or patch side effects.
+        auto unrelated = m->s;
+        unrelated.linear_filter = original.linear_filter;
+        unrelated.sharp_filter = original.sharp_filter;
+        unrelated.smooth_filter = original.smooth_filter;
+        unrelated.screen_effect = original.screen_effect;
+        unrelated.screen_effect_strength = original.screen_effect_strength;
+        CHECK(std::memcmp(&unrelated, &original, sizeof(original)) == 0);
+        put(ini, "[Launcher]\nscreen = classic\nhost_aspect_index = 2\nvolume = 73\n[Other]\nkeep = yes\n");
+        CHECK(gbarecomp::save_presentation_preferences(ini, p.scaling, p.effect, p.strength));
+        SeamConfig reloaded;
+        seam_config_load(ini.string(), &reloaded);
+        CHECK(reloaded.linear_filter == (p.scaling == 1) && reloaded.sharp_filter == (p.scaling == 2));
+        CHECK(reloaded.smooth_filter == (p.scaling == 3));
+        CHECK(reloaded.screen_effect == p.effect && reloaded.screen_effect_strength == p.strength);
+        CHECK(reloaded.volume == 73 && reloaded.host_aspect_index == 2);
+        CHECK(get(ini).find("keep = yes") != std::string::npos);
+    }
+    const auto before_invalid = m->s;
+    CHECK(!launcher_model_apply_graphics_preset(m.get(), -1));
+    CHECK(!launcher_model_apply_graphics_preset(m.get(), 5));
+    CHECK(std::memcmp(&before_invalid, &m->s, sizeof(m->s)) == 0);
+    launcher_model_set_screen_effect_strength(m.get(), 40);
+    CHECK(launcher_model_graphics_preset(m.get()) == -1);
+    CHECK(launcher_model_apply_graphics_preset(m.get(), 1));
+    launcher_model_set_screen_effect_strength(m.get(), 99);
+    CHECK(launcher_model_graphics_preset(m.get()) == 1); // inactive strength is not a different look
+    launcher_model_set_screen_effect(m.get(), 1);
+    CHECK(launcher_model_graphics_preset(m.get()) == -1);
+    launcher_model_restore_defaults(m.get());
+    CHECK(launcher_model_graphics_preset(m.get()) == 0);
+    RecompGraphicsPreset invalid{"Invalid", "Invalid", 4, 0, 35};
+    gi.graphics_presets = &invalid; gi.graphics_preset_count = 1;
+    launcher_model_init(m.get(), &settings, &gi, nullptr);
+    CHECK(m->graphics_preset_count == 0);
+    CHECK(!recomp_graphics_preset_valid(&invalid));
+    CHECK(recomp_graphics_preset_match(nullptr, 5, 0, 0, 35) == -1);
+    std::cout << "PASS: five graphics recipes, capability gates, inferred Custom, preservation and live preference reload\n";
+}
+
 static void test_presentation_filters(const fs::path& root) {
     using namespace gbarecomp_seam;
     const auto ini = root / "Settings/filters.ini";
+    for (int screen = 0; screen < gbarecomp::screen_model_count; ++screen) {
+        put(ini, "[Launcher]\nscreen = raw\nvolume = 73\n");
+        CHECK(gbarecomp::save_screen_model_preference(ini, screen));
+        SeamConfig colour_loaded;
+        seam_config_load(ini.string(), &colour_loaded);
+        CHECK(colour_loaded.screen_kind == screen && colour_loaded.volume == 73);
+        seam_config_save(ini.string(), colour_loaded);
+        CHECK(gbarecomp::read_screen_model_preference(ini) == screen);
+    }
     SeamConfig cfg;
     CHECK(cfg.linear_filter == 0 && cfg.smooth_filter == 0);
     CHECK(cfg.sharp_filter == -1); // unchanged host-default sentinel
@@ -269,7 +408,9 @@ int main(int argc, char** argv) {
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     const auto portable = root / "Portable Game";
     fs::create_directories(portable / "Settings");
+    test_guard_mod(root / std::filesystem::path(u8"Guard mod 日本語"));
     test_presentation_filters(root / "Filter checks");
+    test_graphics_presets(root / "Preset checks");
     put(root / "source/test.gba", "synthetic source, not a ROM");
     const auto imported = gbarecomp::portable_import(portable, "ROMs", root/"source/test.gba");
     CHECK(get(imported) == get(root/"source/test.gba"));

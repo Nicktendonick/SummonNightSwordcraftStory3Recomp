@@ -75,6 +75,9 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR command,int) {
             CloseHandle(mutex); return 0;
         }
         clean_experiment_environment();
+#if defined(SWORDCRAFT3_GUARD_EXPERIMENT)
+        SetEnvironmentVariableW(L"SWORDCRAFT3_SELECT_GUARD",L"1");
+#endif
         for (const auto* folder : {L"Settings",L"Saves",L"Save States",L"ROMs",L"BIOS",L"Mods",L"Captures",L"Logs"})
             fs::create_directories(root/folder);
         // Fail visibly if the selected portable directory is read-only.

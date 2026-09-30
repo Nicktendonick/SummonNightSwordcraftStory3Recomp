@@ -86,7 +86,7 @@ def execute(args, run, width, mode, neutral, audit=False):
     (run / 'Settings').mkdir()
     frames = 90 if audit else args.frames
     command = [str(args.exe), '--window', '--no-launcher', '--scale', '3',
-               '--frames', str(frames), '--screen', 'raw', '--view-width', '240',
+               '--frames', str(frames), '--screen', getattr(args, 'screen', 'raw'), '--view-width', '240',
                '--linear-filter', str(int(scaling == 1)),
                '--sharp-filter', str(int(scaling == 2)),
                '--smooth-filter', str(int(scaling == 3)),

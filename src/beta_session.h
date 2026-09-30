@@ -145,6 +145,20 @@ inline bool refresh_reset_host_aspect_arguments(std::vector<std::string>& args, 
     return true;
 }
 
+inline bool refresh_reset_screen_model_arguments(std::vector<std::string>& args, const std::filesystem::path& ini) {
+    const auto model = gbarecomp::read_screen_model_preference(ini);
+    if (!model) return false;
+    std::vector<std::string> next;
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "--screen") { if (i + 1 < args.size()) ++i; continue; }
+        if (args[i].rfind("--screen=", 0) == 0) continue;
+        next.push_back(args[i]);
+    }
+    next.push_back("--screen"); next.push_back(gbarecomp::screen_model_tokens[*model]);
+    args.swap(next);
+    return true;
+}
+
 inline int supervise_beta_resets(int result, const std::vector<std::string>& resolved_args) {
 #if defined(_WIN32)
     if (std::getenv("SWORDCRAFT3_RESET_CHILD")) return result;
@@ -169,6 +183,8 @@ inline int supervise_beta_resets(int result, const std::vector<std::string>& res
                 refresh_reset_presentation_arguments(args,
                     std::filesystem::path(portable_root.data()) / "Settings/launcher.ini");
                 refresh_reset_host_aspect_arguments(args,
+                    std::filesystem::path(portable_root.data()) / "Settings/launcher.ini");
+                refresh_reset_screen_model_arguments(args,
                     std::filesystem::path(portable_root.data()) / "Settings/launcher.ini");
             }
         }

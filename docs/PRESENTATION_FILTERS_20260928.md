@@ -1,5 +1,9 @@
 # Optional presentation filters — 2026-09-28
 
+Follow-up: [Smooth 2x performance optimization](SMOOTH_PERFORMANCE_20260929.md)
+records the later private Guard-test update. Measurements below describe the
+original implementation and package, not that optimized test build.
+
 ## Player-facing behavior
 
 Launcher Settings and in-game Esc > Graphics expose four scaling modes:

@@ -87,6 +87,34 @@ int main() {
             CHECK(read(file).find(suffix) != std::string::npos);
             CHECK(read(file).substr(0, prefix.size()) == prefix);
         }
+        const auto before_screen = read(file);
+        CHECK(!gbarecomp::read_screen_model_preference(file));
+        for (int model : {0, 1, 2, 3, 4, 0}) {
+            CHECK(gbarecomp::save_screen_model_preference(file, model));
+            CHECK(gbarecomp::read_screen_model_preference(file) == model);
+            CHECK(read(file).find(std::string("screen = ") + gbarecomp::screen_model_tokens[model]) != std::string::npos);
+            CHECK(gbarecomp::read_host_aspect_preference(file, 3) == 1);
+            CHECK(read(file).find("smooth_filter = 1") != std::string::npos);
+            CHECK(read(file).find(suffix) != std::string::npos);
+        }
+        const auto valid_screen = read(file);
+        for (int bad : {-1, 5, 99}) {
+            CHECK(!gbarecomp::save_screen_model_preference(file, bad));
+            CHECK(read(file) == valid_screen);
+        }
+        CHECK(!gbarecomp::update_launcher_text_preferences(file, {"screen"}, {"raw\nvolume=0"}));
+        CHECK(read(file) == valid_screen);
+        for (const std::string bad : {"unknown", "0", "rawoops", "", "raw\nscreen=classic"}) {
+            write(file, "[Launcher]\nscreen=" + bad + "\n");
+            CHECK(!gbarecomp::read_screen_model_preference(file));
+        }
+        write(file, prefix + "[Launcher] ; comment\r\nscreen = unlit # preserved\r\n" + suffix);
+        CHECK(gbarecomp::read_screen_model_preference(file) == 1);
+        CHECK(gbarecomp::save_screen_model_preference(file, 4));
+        CHECK(read(file).find("screen = classic # preserved\r\n") != std::string::npos);
+        CHECK(read(file).find(suffix) != std::string::npos);
+        CHECK(read(file).substr(0, prefix.size()) == prefix);
+        write(file, before_screen);
         const auto valid_aspect = read(file);
         for (int bad : {-1, 3, 99}) {
             CHECK(!gbarecomp::save_host_aspect_preference(file, bad, 3));
@@ -101,12 +129,14 @@ int main() {
 #ifdef _WIN32
         CHECK(SetFileAttributesW(file.c_str(), FILE_ATTRIBUTE_READONLY));
         CHECK(!save(file, 3, 2, 100));
+        CHECK(!gbarecomp::save_screen_model_preference(file, 3));
         CHECK(SetFileAttributesW(file.c_str(), FILE_ATTRIBUTE_NORMAL));
         CHECK(read(file) == before_failure);
         HANDLE lock = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         CHECK(lock != INVALID_HANDLE_VALUE);
         const bool blocked = !save(file, 3, 2, 100);
+        CHECK(!gbarecomp::save_screen_model_preference(file, 2));
         CHECK(CloseHandle(lock));
         CHECK(blocked && read(file) == before_failure);
         lock = CreateFileW(file.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,

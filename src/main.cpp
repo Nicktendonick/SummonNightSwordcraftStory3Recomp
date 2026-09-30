@@ -12,9 +12,12 @@
 #include "beta_credits.h"
 #include "beta_session.h"
 #include "portable_language.h"
+#include "guard_preferences.h"
 
 #if defined(SWORDCRAFT3_RECOMP_UI)
 #include "game_launcher_boot.h"
+#include "recomp_launcher.h"
+#include "graphics_presets.h"
 #endif
 
 namespace {
@@ -39,6 +42,17 @@ int main(int argc, char** argv) {
     }
 
     gbarecomp::RunOptions opts;
+    swordcraft3::GuardPreferences guard_preferences;
+#if defined(SWORDCRAFT3_RECOMP_UI)
+    RecompLauncherCBuiltinMod guard_mod{
+        "select-guard", "Hold Select to Guard",
+        "Combat only: hold your Select button to guard; release to stop. "
+        "Keeps your selected R-slot ability. Replaces Select's auto-battle toggle "
+        "during manual combat. Outside combat, Select is unchanged. "
+        "Off restores the original controls. Saved for both languages.",
+        &guard_preferences, swordcraft3::GuardPreferences::get,
+        swordcraft3::GuardPreferences::set, swordcraft3::GuardPreferences::last_error};
+#endif
     std::string original_credits, port_credits, tools_credits, launcher_folder_note; // owns launcher text until exit
     opts.builtin_game_name =
         "Summon Night: Craft Sword Monogatari - Hajimari no Ishi";
@@ -73,6 +87,19 @@ int main(int argc, char** argv) {
         if (std::strcmp(preview, "1") == 0) {
             opts.builtin_game_name = "Summon Night: Swordcraft Story 3 - PC Beta";
             opts.data_root = std::getenv("SWORDCRAFT3_PORTABLE_ROOT");
+            if (opts.data_root && *opts.data_root) {
+#if defined(_WIN32)
+                const wchar_t* guard_root = _wgetenv(L"SWORDCRAFT3_PORTABLE_ROOT");
+                guard_preferences.load(guard_root ? std::filesystem::path(guard_root)
+                                                  : std::filesystem::path(opts.data_root));
+#else
+                guard_preferences.load(std::filesystem::path(opts.data_root));
+#endif
+#if defined(SWORDCRAFT3_RECOMP_UI)
+                opts.launcher_builtin_mods = &guard_mod;
+                opts.launcher_builtin_mod_count = 1;
+#endif
+            }
             opts.launcher_source_rom_sha1 = swordcraft3::japanese_sha1;
             opts.launcher_required_patch_sha1 = swordcraft3::english_sha1;
             opts.launcher_allow_unpatched = true;
@@ -145,8 +172,15 @@ int main(int argc, char** argv) {
 
 #if defined(SWORDCRAFT3_RECOMP_UI)
     std::vector<std::string> args(argv, argv + argc);
+    opts.graphics_presets = swordcraft3::graphics_presets;
+    opts.graphics_preset_count = swordcraft3::graphics_preset_count;
     if (game_launcher_preboot(args, opts)) {
         return 0;
+    }
+    if (!guard_preferences.path.empty()) {
+        set_swordcraft3_select_guard(guard_preferences.enabled);
+        if (!guard_preferences.error.empty())
+            std::fprintf(stderr, "[sc3:guard] %s\n", guard_preferences.error.c_str());
     }
     if (opts.launcher_allow_unpatched) {
         try {
