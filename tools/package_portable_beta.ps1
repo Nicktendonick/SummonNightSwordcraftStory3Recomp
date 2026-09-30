@@ -11,7 +11,7 @@ if (Test-Path -LiteralPath $Destination) {
     throw 'Choose a new destination: packaging never overwrites a player installation.'
 }
 $build = Join-Path $lab 'build-native'
-$files = @('Swordcraft3CustomRendererBeta.exe','SDL2.dll','libstdc++-6.dll','libgcc_s_seh-1.dll','libwinpthread-1.dll')
+$files = @('Swordcraft3CustomRendererBeta.exe','Swordcraft3Japanese.exe','SDL2.dll','libstdc++-6.dll','libgcc_s_seh-1.dll','libwinpthread-1.dll')
 foreach ($name in $files + @('Swordcraft Story 3 Beta.exe')) {
     if (!(Test-Path -LiteralPath (Join-Path $build $name))) { throw "Missing build file: $name" }
 }

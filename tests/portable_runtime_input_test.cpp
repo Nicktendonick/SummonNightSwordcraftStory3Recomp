@@ -6,6 +6,8 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
+#include <cstdlib>
 #define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
 // No guest CPU is run by this host-input test.
 struct DispatchEntry { uint32_t addr; uint8_t thumb, resume; void (*fn)(void); };
@@ -30,7 +32,31 @@ int main() {
     SDL_Joystick* joystick = SDL_JoystickOpen(index);
     CHECK(joystick);
     gbarecomp::HostWindow window;
+    // HostWindow uses the C-runtime environment; SDL's DLL may use a different
+    // Windows CRT and its SDL_setenv does not update this module's getenv cache.
+#ifdef _WIN32
+    _putenv_s("GBARECOMP_SCREEN", "frontlit");
+#else
+    setenv("GBARECOMP_SCREEN", "frontlit", 1);
+#endif
     CHECK(window.open(1, 240, 160, "Synthetic input test"));
+    CHECK(window.screen_model() == 2); // getter reports the actual boot/environment model
+#ifdef _WIN32
+    _putenv_s("GBARECOMP_SCREEN", "");
+#else
+    unsetenv("GBARECOMP_SCREEN");
+#endif
+    CHECK(window.set_screen_model(0));
+    CHECK(window.screen_model() == 0);
+    int screen_writes = 0;
+    CHECK(!window.set_screen_model(4, [&] { ++screen_writes; return false; }));
+    CHECK(screen_writes == 1 && window.screen_model() == 0);
+    CHECK(!window.set_screen_model(99, [&] { ++screen_writes; return true; }));
+    CHECK(screen_writes == 1 && window.screen_model() == 0);
+    CHECK(!window.set_screen_model(3, []() -> bool { throw std::runtime_error("save failure"); }));
+    CHECK(window.screen_model() == 0);
+    CHECK(window.set_screen_model(0, [&] { ++screen_writes; return true; }));
+    CHECK(screen_writes == 2); // same-model choice can still persist
     auto root = std::filesystem::current_path() / "validation/portable-runtime-input";
     std::filesystem::create_directories(root);
     {
@@ -91,12 +117,74 @@ int main() {
     window.set_audio_enabled(false); window.set_game_paused(false); CHECK(!window.audio_enabled());
     window.set_game_paused(true); window.set_audio_enabled(true); CHECK(window.audio_enabled());
     window.set_game_paused(false); CHECK(window.audio_enabled());
+    // Exercise actual presentation resources, not framebuffer/pixel assertions.
+    // The input buffer is synthetic; no guest execution or real player save.
+    std::vector<uint8_t> frame(384 * 160 * 3, 64);
+    CHECK(window.scaling_filter() == 0 && window.screen_effect() == 0);
+    CHECK(window.screen_effect_strength() == 35);
+    for (int width : {240, 284, 384}) {
+        CHECK(window.set_surface_size(width, 160));
+        for (int scaling = 0; scaling < 4; ++scaling) {
+            window.set_scaling_filter(scaling);
+            CHECK(window.scaling_filter() == scaling);
+            CHECK(window.linear_filter() == (scaling == 1));
+            for (int effect = 0; effect < 3; ++effect) {
+                window.set_screen_effect(effect, 50);
+                CHECK(window.screen_effect() == effect && window.screen_effect_strength() == 50);
+                for (int model : {0, 1, 2, 3, 4}) {
+                    CHECK(window.set_screen_model(model));
+                    CHECK(window.screen_model() == model);
+                    CHECK(window.scaling_filter() == scaling && window.screen_effect() == effect);
+                    CHECK(window.screen_effect_strength() == 50);
+                    const auto before = window.filter_stats();
+                    window.present(frame.data());
+                    const auto after = window.filter_stats();
+                    CHECK(after.frames == before.frames + 1);
+                    CHECK(after.colour_frames == before.colour_frames + (model != 0));
+                    CHECK(after.smooth_frames == before.smooth_frames + (scaling == 3));
+                    CHECK(after.effect_frames == before.effect_frames + (effect != 0));
+                    CHECK(after.fallback_frames == before.fallback_frames);
+                }
+            }
+        }
+    }
+    CHECK(window.set_surface_size(240, 160));
+    window.set_scaling_filter(2);
+    window.set_screen_effect(0, 35);
+    SDL_Window* test_window = SDL_GetWindowFromID(1);
+    CHECK(test_window);
+    SDL_SetWindowSize(test_window, 800, 600); // non-integer presentation scale
+    const auto before_sharp = window.filter_stats();
+    window.present(frame.data());
+    CHECK(window.filter_stats().sharp_frames == before_sharp.sharp_frames + 1);
+    window.set_screen_effect(2, 0);
+    const auto zero_strength = window.filter_stats();
+    window.present(frame.data());
+    CHECK(window.filter_stats().effect_frames == zero_strength.effect_frames);
+    window.set_linear_filter(true); CHECK(window.scaling_filter() == 1);
+    window.set_linear_filter(false); CHECK(window.scaling_filter() == 0);
+    recomp_runtime_ui_open(ui);
+    window.present(frame.data()); CHECK(recomp_runtime_ui_is_open(ui));
+    window.set_scaling_filter(3); window.set_screen_effect(1, 35);
+    for (Uint32 kind : {SDL_RENDER_TARGETS_RESET, SDL_RENDER_DEVICE_RESET}) {
+        SDL_Event reset{}; reset.type = kind;
+        CHECK(SDL_PushEvent(&reset) == 1); sample();
+        const auto before = window.filter_stats();
+        window.present(frame.data());
+        const auto after = window.filter_stats();
+        CHECK(after.smooth_frames == before.smooth_frames + 1);
+        CHECK(after.effect_frames == before.effect_frames + 1);
+        CHECK(window.screen_model() == 4 && after.colour_frames == before.colour_frames + 1);
+        CHECK(after.fallback_frames == before.fallback_frames);
+        CHECK(recomp_runtime_ui_is_open(ui));
+    }
     window.set_runtime_ui(nullptr);
     recomp_runtime_ui_destroy(ui);
     window.close();
     SDL_JoystickClose(joystick);
     SDL_JoystickDetachVirtual(index);
     SDL_Quit();
-    std::cout << "PASS: runtime input config, controller remap/release, assist trigger, Esc/Guide navigation, keyboard/controller confirmation, pause/audio preference\n";
+    CHECK(!window.set_screen_model(3));
+    std::cout << "PASS: runtime input, menu/audio, 180 colour/scaler/effect/width combinations, transaction rejection, device reset, fractional Sharp, zero strength, menu overlay\n";
     return 0;
 }
