@@ -1,0 +1,8 @@
+{
+  "version": "2.32.10",
+  "url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-mingw.zip",
+  "archive": "SDL2-devel-2.32.10-mingw.zip",
+  "archive_sha256": "f15cff5fca62ec9381a016ef1d42a95c638cd72d2f226ba5781c76fe43dbd1ac",
+  "directory": "SDL2-2.32.10",
+  "dll_sha256": "53e8fa7e9ed43c30bd650c39396f0d9d2067d2fff0b926c9433b75202592e4aa"
+}

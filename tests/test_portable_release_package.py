@@ -69,6 +69,22 @@ class PortableArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "allowlist"):
             package.verify_archive(self.archive)
 
+    def test_reviewed_sdl_does_not_require_system_sdl_update(self):
+        pin = json.loads((ROOT / "packaging/sdl2.json").read_text())
+        with patch.object(package, "file_hash", return_value=pin["dll_sha256"]) as hashes:
+            package.verify_runtime_dll(ROOT / "SDL2.dll", ROOT / "unused-system")
+            hashes.assert_called_once_with(ROOT / "SDL2.dll")
+
+    def test_old_or_tampered_sdl_rejected(self):
+        with patch.object(package, "file_hash", return_value="wrong"):
+            with self.assertRaisesRegex(ValueError, "SDL2 does not match"):
+                package.verify_runtime_dll(ROOT / "SDL2.dll", ROOT)
+
+    def test_other_runtime_dlls_still_match_compiler(self):
+        with patch.object(package, "file_hash", side_effect=["one", "two"]):
+            with self.assertRaisesRegex(ValueError, "DLL differs"):
+                package.verify_runtime_dll(ROOT / "libstdc++-6.dll", ROOT)
+
 
 if __name__ == "__main__":
     unittest.main()

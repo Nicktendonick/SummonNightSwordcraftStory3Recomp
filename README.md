@@ -11,6 +11,20 @@ This is a source backup, **not a new portable release or a clean-clone build
 certification**. The working-build source and SDL2 experiment are saved on
 separate checkpoint branches. See [checkpoint scope and known build blockers](docs/SOURCE_CHECKPOINT_20261008.md).
 
+## SDL2 dependency test October 8 2026
+
+Windows dynamic builds now pin the official SDL2 **2.32.10** MinGW SDK.
+Run `tools/setup_sdl2.ps1` before configuring; the verified SDK stays inside
+the owner project's `.tooling` directory. `packaging/sdl2.json` records its
+download and SHA-256 identities. The system compiler and SDL installation are
+unchanged. `SWORDCRAFT3_SDL2_ROOT` can select another location for the same SDK.
+
+The separate private `release/Portable SDL2 Test` is **not promoted** over
+Portable UI Test. Functional tests pass, but widescreen pacing varied and the
+rebuilt candidate had slower runs. See the SDL2 section of
+[UI test verification](docs/UI_CLEANUP_TEST.md) before packaging a release.
+Ghidra, the launcher framework, and upstream engine revisions were not upgraded.
+
 ## Current portable work — September 30, 2026
 
 The portable packaging recipe now uses the released **English translation

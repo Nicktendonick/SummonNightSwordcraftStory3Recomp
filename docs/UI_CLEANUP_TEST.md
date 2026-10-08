@@ -112,3 +112,40 @@ subtitle. The stripped programs retain identical loaded code to their build
 outputs and contain the exact three-line string. Portable preflight passed;
 all 80 other installed files were hash-checked unchanged. Rollback programs:
 `validation/tagline-20261007-012628/rollback` under this checkout.
+
+## SDL2 test October 8 2026
+
+The separate private `release/Portable SDL2 Test` uses SDL2 2.32.10 with both
+language engines rebuilt against its matching headers and import library.
+Portable UI Test remains unchanged. The SDL2 test contains private ROM/BIOS,
+patch and save copies and must not be redistributed. It starts with copies of
+the original player preferences, not settings altered by test automation.
+
+The SDK comes from the official libsdl-org release. Its archive checksum,
+x64 DLL checksum and version are pinned in `packaging/sdl2.json`. The matching
+license is included, and packaging rejects an older or modified SDL DLL.
+The compiler and its runtime DLLs, Ghidra, and upstream engine/UI versions are
+unchanged. The only reusable engine change is a build option for staging a
+specific SDK DLL instead of always taking the system SDL DLL.
+
+Verification passed: 58 configured tests, eight packaging checks, real-window
+English/Japanese launches, all seven launcher pages, both menu pause policies,
+Escape/resume and cancelled reset/quit actions. Virtual-controller and keyboard
+tests cover the existing filter combinations and renderer reset handling.
+Twenty-four short paired battle runs exercised six filter/effect combinations
+at 240 and 384 pixels with real audio processing and no presentation fallbacks.
+These checks do not certify audible quality or physical controller compatibility.
+
+Performance approval remains open. Four longer reverse-order comparisons and
+eight executable/DLL cross-tests showed variable pacing. Short runs were mostly
+near 60 fps, but one longer rebuilt-candidate run fell to 52.44 fps versus
+baseline runs near 59 fps; mixed combinations also varied. This does not isolate
+SDL2 as the cause and is not a measured performance improvement. Do not promote
+the candidate or assume the beta release ZIP has been updated.
+
+Evidence and rollback copies are under
+`validation/sdl2-20261008-151616-fccc/`. `report.json` records functional results,
+timings, hashes and `performance_approved=false`. The repeatable test tool is
+`tools/update_sdl2.py`; installation explicitly requires performance approval.
+All original Portable UI Test files, including saves and settings, were checked
+unchanged. Existing shared ZIPs were not rebuilt or published.

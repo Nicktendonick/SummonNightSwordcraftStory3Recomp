@@ -14,9 +14,6 @@ try {
         "-DCMAKE_MAKE_PROGRAM=$projectRoot/.tooling/bin/ninja.exe",
         "-DGBARECOMP_GENERATED_BIOS_DIR=$projectRoot/build-assist/generated_bios",
         "-DSC3_LAB_GUEST_OBJECT_DIR=$projectRoot/build-beta/CMakeFiles/SummonNightSwordcraftStory3RecompBeta.dir/generated-beta",
-        '-DSDL2_DIR=C:/msys64/mingw64/lib/cmake/SDL2',
-        '-DSDL2_INCLUDE_DIR=C:/msys64/mingw64/include/SDL2',
-        '-DSDL2_LIBRARY=C:/msys64/mingw64/lib/libSDL2.dll.a',
         '-DGBARECOMP_ENABLE_MODS=OFF')
     $arguments += '-DSWORDCRAFT3_PORTABLE_JAPANESE=ON'
     if ($JapaneseRom) {

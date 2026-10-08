@@ -56,6 +56,7 @@ if(NOT EXISTS "${RECOMP_UI_ROOT}/recomp_ui.cmake")
     message(FATAL_ERROR "recomp-ui submodule is missing")
 endif()
 
+include(cmake/SwordcraftSDL2.cmake)
 add_subdirectory("${GBARECOMP_ROOT}" gbarecomp_build EXCLUDE_FROM_ALL)
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/recompiled.cpp")

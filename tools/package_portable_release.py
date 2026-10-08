@@ -76,7 +76,8 @@ def recipe():
     if not toml.is_relative_to(OWNER):
         raise ValueError("Unexpected external toml++ source")
     notices.append((toml / "LICENSE", "tomlplusplus-LICENSE.txt"))
-    for name in ["SDL2-LICENSE.txt", "libwinpthread-COPYING.txt", "gcc-libs-README.txt",
+    notices.append((ROOT / "packaging/portable-beta/notices/SDL2-LICENSE.txt", "SDL2-LICENSE.txt"))
+    for name in ["libwinpthread-COPYING.txt", "gcc-libs-README.txt",
                  "gcc-libs-COPYING3.txt", "gcc-libs-COPYING.RUNTIME.txt"]:
         notices.append((ROOT / "packaging/alpha-v01/notices" / name, name))
     files += [(source, "Runtime/notices/" + dest) for source, dest in notices]
@@ -114,6 +115,15 @@ def verify_archive(archive):
     return manifest
 
 
+def verify_runtime_dll(source, compiler_bin):
+    if source.name == "SDL2.dll":
+        pin = json.loads((ROOT / "packaging/sdl2.json").read_text())
+        if file_hash(source) != pin["dll_sha256"]:
+            raise ValueError("SDL2 does not match the reviewed SDK pin")
+    elif file_hash(source) != file_hash(compiler_bin / source.name):
+        raise ValueError("DLL differs from installed runtime; re-review notices: " + source.name)
+
+
 def prepare(strip):
     files = recipe()
     if len(files) != len({dest.casefold() for _, dest in files}):
@@ -124,8 +134,8 @@ def prepare(strip):
             raise ValueError("Missing/linked input: " + str(source))
         if dest.startswith("Runtime/assets/") and file_hash(source) != file_hash(BUILD / dest[8:]):
             raise ValueError("Source asset does not match the tested build: " + dest)
-        if source.suffix == ".dll" and file_hash(source) != file_hash(strip.parent / source.name):
-            raise ValueError("DLL differs from installed runtime; re-review notices: " + source.name)
+        if source.suffix == ".dll":
+            verify_runtime_dll(source, strip.parent)
     if not strip.is_file():
         raise ValueError("Missing debug stripping tool")
     # The config must contain only the non-private save type/size settings.
