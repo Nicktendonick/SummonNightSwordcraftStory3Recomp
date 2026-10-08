@@ -10,7 +10,15 @@ int main(int argc, char** argv) {
     CHECK(argument_value(args, "--save") == "chosen.eep");
     CHECK(std::string(japanese_language.save) != english_language.save);
     CHECK(std::string(japanese_language.states) != english_language.states);
+#if defined(SWORDCRAFT3_RELEASE106_TRANSLATION)
+    CHECK(std::string(english_language.save) == "Saves/english-1.0.6f.eep");
+    CHECK(std::string(english_language.states) == "Save States/english-1.0.6f");
+#elif defined(SWORDCRAFT3_RELEASE105_TRANSLATION)
+    CHECK(std::string(english_language.save) == "Saves/english-1.0.5f.eep");
+    CHECK(std::string(english_language.states) == "Save States/english-1.0.5f");
+#else
     CHECK(std::string(english_language.save) == "Saves/battery.eep");
+#endif
     if (argc == 4) {
         CHECK(&language_for_rom(argv[1]) == &japanese_language);
         CHECK(&language_for_rom(argv[2]) == &english_language);
@@ -26,5 +34,5 @@ int main(int argc, char** argv) {
         CHECK(&resolve_portable_language(args, ".") == &english_language);
         CHECK(argument_value(args, "--save") == "explicit.eep");
     }
-    std::cout << "PASS: language routing, legacy English save paths and explicit save overrides\n";
+    std::cout << "PASS: language routing, revision-specific save paths and explicit save overrides\n";
 }

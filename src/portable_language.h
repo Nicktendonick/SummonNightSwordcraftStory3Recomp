@@ -3,6 +3,7 @@
 // Static recompilation has one instruction corpus per ROM revision. Resolve
 // actual bytes before choosing a sibling engine; never trust a filename or a
 // user-supplied --rom-sha1 to decide which compiled code can execute them.
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -11,7 +12,25 @@
 
 namespace swordcraft3 {
 inline constexpr const char* japanese_sha1 = "3f5253fcf57e07ce52472bd29a61d16b98a12376";
+#if defined(SWORDCRAFT3_RELEASE106_TRANSLATION)
+inline constexpr const char* english_sha1 = "6753a22a096b8adaa3a869333b99fcfe29ba1fec";
+inline constexpr const char* english_crc32 = "0xC76631A9";
+inline constexpr std::uint32_t english_crc32_value = 0xC76631A9u;
+inline constexpr const char* english_label = "English (translation 1.0.6.f)";
+inline constexpr const char* english_patch_name = "English 1.0.6.f BPS";
+#elif defined(SWORDCRAFT3_RELEASE105_TRANSLATION)
+inline constexpr const char* english_sha1 = "06a9f4db52f40a7034dc1c74161a705f30edb858";
+inline constexpr const char* english_crc32 = "0xCC25DCDC";
+inline constexpr std::uint32_t english_crc32_value = 0xCC25DCDCu;
+inline constexpr const char* english_label = "English (translation 1.0.5.f)";
+inline constexpr const char* english_patch_name = "English 1.0.5.f BPS";
+#else
 inline constexpr const char* english_sha1 = "bb2eebf98deb59bb6218442c2308bb5033ae2915";
+inline constexpr const char* english_crc32 = "0xA8F22FCA";
+inline constexpr std::uint32_t english_crc32_value = 0xA8F22FCAu;
+inline constexpr const char* english_label = "English (translation)";
+inline constexpr const char* english_patch_name = "English beta BPS";
+#endif
 struct PortableLanguage {
     const char* label;
     const char* sha1;
@@ -24,8 +43,14 @@ inline constexpr PortableLanguage japanese_language{
     "Japanese (original)", japanese_sha1, "0x12AFAE5D", "Swordcraft3Japanese.exe",
     "Saves/japanese.eep", "Save States/japanese"};
 inline constexpr PortableLanguage english_language{
-    "English (translation)", english_sha1, "0xA8F22FCA", "Swordcraft3CustomRendererBeta.exe",
+    english_label, english_sha1, english_crc32, "Swordcraft3CustomRendererBeta.exe",
+#if defined(SWORDCRAFT3_RELEASE106_TRANSLATION)
+    "Saves/english-1.0.6f.eep", "Save States/english-1.0.6f"};
+#elif defined(SWORDCRAFT3_RELEASE105_TRANSLATION)
+    "Saves/english-1.0.5f.eep", "Save States/english-1.0.5f"};
+#else
     "Saves/battery.eep", "Save States/beta"};
+#endif
 
 inline const PortableLanguage& language_for_rom(const std::filesystem::path& path) {
     if (std::filesystem::file_size(path) != 0x02000000)
@@ -36,7 +61,7 @@ inline const PortableLanguage& language_for_rom(const std::filesystem::path& pat
     const auto hash = gba::sha1(bytes.data(), bytes.size()).hex();
     if (hash == japanese_sha1) return japanese_language;
     if (hash == english_sha1) return english_language;
-    throw std::runtime_error("Unsupported ROM revision. This package supports the original Japanese ROM and the matching English beta patch only.");
+    throw std::runtime_error(std::string("Unsupported ROM revision. This package supports the original Japanese ROM and the matching ") + english_patch_name + " only.");
 }
 
 inline std::string argument_value(const std::vector<std::string>& args, const char* key) {

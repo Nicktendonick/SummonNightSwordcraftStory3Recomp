@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import shutil
 import subprocess
 import time
 
@@ -17,11 +18,23 @@ from benchmark_presentation_filters import ROOT, OWNER, DEFAULT_STATE, digest
 
 
 class Session:
-    def __init__(self, out, enabled, exe=None, rom=None, diagnostic_env=None):
+    def __init__(self, out, enabled, exe=None, rom=None, diagnostic_env=None, battery_source=None, camera=None, camera_mode=None, edge_cover=None):
         self.out = out
         out.mkdir()
         (out/'Settings').mkdir()
         (out/'Settings/guard.ini').write_text('[Launcher]\nselect_guard = '+str(int(enabled))+'\n', encoding='utf-8')
+        if camera_mode is not None:
+            assert camera_mode in (0,1,2) and camera is None
+            (out/'Settings/battle-camera.ini').write_text('[Launcher]\nbattle_camera_mode = '+str(camera_mode)+'\n',encoding='utf-8')
+            if edge_cover is not None:
+                assert isinstance(edge_cover, bool)
+                with (out/'Settings/battle-camera.ini').open('a',encoding='utf-8') as settings:
+                    settings.write('battle_edge_cover = '+str(int(edge_cover))+'\n')
+        elif camera is not None:
+            (out/'Settings/battle-camera.ini').write_text('[Launcher]\nbounded_battle_camera = '+str(int(camera))+'\n',encoding='utf-8')
+        if battery_source is not None:
+            assert battery_source.is_file() and battery_source.stat().st_size == 8192
+            shutil.copyfile(battery_source, out/'isolated.eep')
         env = {k: v for k, v in os.environ.items() if not k.startswith(('GBARECOMP_', 'SWORDCRAFT3_', 'SDL_', 'LNG_'))}
         env['PATH'] = 'C:/msys64/mingw64/bin;' + env.get('PATH', '')
         for flag in ('CUSTOM_RENDERER', 'FULL_FIELD_RENDERER', 'FULL_COMBAT_RENDERER',

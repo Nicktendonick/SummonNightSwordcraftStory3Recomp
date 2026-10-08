@@ -63,13 +63,78 @@ static void test_custom_choices() {
     std::cout << "PASS: Custom choice navigation, wrap, dynamic descriptions, sparse choices and rejected saves\n";
 }
 
+static void test_organized_menu() {
+    State state;
+    const char* choices[]={"Current","Bounded","Follow + edge stops"};
+    RecompRuntimeUiItem extras[3]{};
+    extras[0].key="test.camera"; extras[0].section="Graphics";
+    extras[0].label="Battle framing"; extras[0].group="Battle View";
+    extras[0].type=RECOMP_RUNTIME_UI_CHOICE; extras[0].choices=choices; extras[0].choice_count=3;
+    extras[0].maximum=2; extras[0].step=1;
+    extras[1]=extras[0]; extras[1].key="test.picture"; extras[1].group="Picture";
+    extras[2]=extras[0]; extras[2].key="test.aspect"; extras[2].group="Window & Screen";
+    RecompRuntimeUiStandardConfig c{};
+    c.menu.theme="storybook";
+    c.menu.title="Swordcraft Story 3";
+    c.menu.subtitle="Craftknights!\nArtisans of weapons!\nMasters of the sword!";
+    c.menu.presentation_flags=RECOMP_RUNTIME_UI_PRESENTATION_ORGANIZED;
+    c.menu.callbacks.context=&state; c.menu.callbacks.run_action=action;
+    c.menu.callbacks.get_value=[](void*,const RecompRuntimeUiItem*,int* out){*out=2;return 1;};
+    c.features=RECOMP_RUNTIME_UI_STANDARD_PAUSE | RECOMP_RUNTIME_UI_STANDARD_RESUME |
+        RECOMP_RUNTIME_UI_STANDARD_RESET | RECOMP_RUNTIME_UI_STANDARD_CLOSE |
+        RECOMP_RUNTIME_UI_STANDARD_FULLSCREEN | RECOMP_RUNTIME_UI_STANDARD_WINDOW_SCALE |
+        RECOMP_RUNTIME_UI_STANDARD_VOLUME;
+    c.extra_items=extras; c.extra_item_count=3;
+    auto* ui=recomp_runtime_ui_create_standard(&c); CHECK(ui);
+    CHECK(ui->section_count==3 && std::string(ui->sections[1])=="Graphics");
+    CHECK(std::string(recomp_runtime_ui_section_item(ui,0,0)->key)==RECOMP_RUNTIME_UI_KEY_PAUSE);
+    CHECK(std::string(recomp_runtime_ui_section_item(ui,0,1)->key)==RECOMP_RUNTIME_UI_KEY_RESUME);
+    CHECK(std::string(recomp_runtime_ui_section_item(ui,0,2)->group)=="End session");
+    CHECK(std::string(recomp_runtime_ui_section_item(ui,0,3)->label)=="Quit game");
+    const char* expected[]={RECOMP_RUNTIME_UI_KEY_WINDOW_SCALE,RECOMP_RUNTIME_UI_KEY_FULLSCREEN,
+                            "test.aspect","test.picture","test.camera"};
+    for(size_t i=0;i<5;++i) CHECK(std::string(recomp_runtime_ui_section_item(ui,1,i)->key)==expected[i]);
+    ImGui::CreateContext();
+    auto& io=ImGui::GetIO(); io.IniFilename=nullptr; io.DeltaTime=1.f/60;
+    unsigned char* pixels; int w,h; io.Fonts->GetTexDataAsRGBA32(&pixels,&w,&h);
+    recomp_runtime_ui_open(ui);
+    for(auto size : {ImVec2(1280,720),ImVec2(960,640),ImVec2(640,480)}) {
+        io.DisplaySize=size;
+        for(size_t section=0;section<ui->section_count;++section) {
+            recomp_runtime_ui_enter_section(ui,section);
+            for(int frame=0;frame<3;++frame) {
+                ImGui::NewFrame(); recomp_runtime_ui_render_imgui(ui);
+                auto* window=ImGui::FindWindowByName("##recomp-runtime-ui");
+                CHECK(window && window->Pos.x>=0 && window->Pos.x+window->Size.x<=size.x);
+                if(frame>0) CHECK(window->ContentSize.x<=window->Size.x);
+                ImGui::Render();
+            }
+        }
+    }
+    // Click the actual persistent footer, not the Game-section Resume row.
+    auto* window=ImGui::FindWindowByName("##recomp-runtime-ui");
+    // The retained ImGui layout cursor identifies the footer's actual row;
+    // do not assume an inset from the bottom (themes have different padding).
+    ImVec2 footer(window->Pos.x+window->Size.x-55,window->DC.CursorPosPrevLine.y+8);
+    io.AddMousePosEvent(footer.x,footer.y);
+    for(int step=0;step<3;++step) {
+        if(step==1) io.AddMouseButtonEvent(0,true);
+        if(step==2) io.AddMouseButtonEvent(0,false);
+        ImGui::NewFrame(); recomp_runtime_ui_render_imgui(ui); ImGui::Render();
+    }
+    CHECK(state.last==RECOMP_RUNTIME_UI_KEY_RESUME && state.actions==1);
+    ImGui::DestroyContext(); recomp_runtime_ui_destroy(ui);
+    std::cout << "PASS: organized sections, ordering, three layout sizes, persistent footer invokes Resume\n";
+}
+
 int main() {
+    test_organized_menu();
     test_custom_choices();
     State s;
     RecompRuntimeUiStandardConfig c{};
     c.menu.theme = "storybook";
     c.menu.title = "Swordcraft Story 3";
-    c.menu.subtitle = "Craftknights! Artisans of weapons. Masters of the sword.";
+    c.menu.subtitle = "Craftknights!\nArtisans of weapons!\nMasters of the sword!";
     c.menu.callbacks.context = &s;
     c.menu.callbacks.run_action = action;
     c.menu.callbacks.is_enabled = enabled;

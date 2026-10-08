@@ -1,0 +1,11 @@
+# Append to the Japanese base configuration only for English 1.0.6.f.
+# The supplied 1.0.6.f ROM differs from reviewed 1.0.5.f at one data byte
+# (ROM offset 0x17f32ea). The script dispatch instructions/table at
+# 0801262C..08012700 are byte-identical; preserve the exact guarded metadata.
+[[jump_table]]
+addr = 0x080126C0
+stride = 4
+count = 16
+format = "abs32"
+entries_mode = "thumb"
+name = "release106_script_binary_operators"

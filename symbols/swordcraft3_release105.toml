@@ -1,0 +1,13 @@
+# Append to the Japanese base configuration only for English 1.0.5.f.
+# The translated script evaluator uses an ADR-based operator table that the
+# discovery pass did not infer. Actual patched instructions at 08012632..3E:
+# subtract opcode 0x82; bound to 0x0F; shift index by 2; ADR 080126C0;
+# load table word; MOV PC,r0. Even pointers remain Thumb (not BX).
+# Review record: docs/TRANSLATION_105_TEST.md. No ROM payload is stored here.
+[[jump_table]]
+addr = 0x080126C0
+stride = 4
+count = 16
+format = "abs32"
+entries_mode = "thumb"
+name = "release105_script_binary_operators"

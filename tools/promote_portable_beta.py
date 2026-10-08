@@ -15,7 +15,7 @@ from package_portable_release import recipe
 from update_guard_performance import ROOT, OWNER, stamp, snapshot, replace_with_verified_copy
 
 TARGET = OWNER/'release/Portable Beta'
-SOURCE = OWNER/'release/Guard Experiment 20260929-023325-a2fa'
+SOURCE = OWNER.parent/'OldSCS3Portables/Guard Experiment 20260929-023325-a2fa'
 PINS = {
     'Runtime/Swordcraft3CustomRendererBeta.exe': '324057340aaa3667cb22118b65a63f720c1ba318d72c57a61417af0a12d1f4ee',
     'Runtime/Swordcraft3Japanese.exe': 'c72c0c7afd6c2e4a56760ae918a9f21ffce6df055c93a67362dc587ab27148bf',

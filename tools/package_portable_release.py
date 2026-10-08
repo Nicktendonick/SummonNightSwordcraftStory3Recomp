@@ -37,8 +37,8 @@ def run(args, **kwargs):
 
 def recipe():
     files = [(BUILD / STARTER, STARTER),
-             (BUILD / GAME, "Runtime/" + GAME),
-             (BUILD / JAPANESE, "Runtime/" + JAPANESE),
+             (BUILD / "Swordcraft3Translation106.exe", "Runtime/" + GAME),
+             (BUILD / "Swordcraft3Japanese106.exe", "Runtime/" + JAPANESE),
              (ROOT / "native-test.toml", "Runtime/game.toml")]
     for name in ["SDL2.dll", "libstdc++-6.dll", "libgcc_s_seh-1.dll", "libwinpthread-1.dll"]:
         files.append((BUILD / name, "Runtime/" + name))
@@ -168,9 +168,9 @@ def prepare(strip):
         revisions[name] = {"head": run([str(GIT), "-C", str(directory), "rev-parse", "HEAD"]),
                            "working_diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
                            "status": run([str(GIT), "-C", str(directory), "status", "--short"]).splitlines()}
-    manifest = {"schema": 1, "created_utc": stamp, "variant": "Japanese + optional English-beta",
+    manifest = {"schema": 1, "created_utc": stamp, "variant": "Japanese + optional English 1.0.6.f",
                 "publication_ready": False, "review": "Runtime/notices/RELEASE-REVIEW.md",
-                "description": "Dual-engine portable beta; readable import names; isolated language saves; local candidate",
+                "description": "Dual-engine portable UI test; organized launcher/Esc Graphics; English Translation in Mods; released English 1.0.6.f; optional battle framing; isolated revision saves",
                 "revisions": revisions, "files": rows}
     (payload / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     allowed = {dest for _, dest in files} | {MANIFEST, SUMS}

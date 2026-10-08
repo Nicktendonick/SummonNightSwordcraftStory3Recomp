@@ -16,7 +16,7 @@ import benchmark_presentation_filters as bench
 from validate_guard_experiment import Session
 
 ROOT, OWNER = bench.ROOT, bench.OWNER
-PACKAGE = OWNER/'release/Guard Experiment 20260929-023325-a2fa'
+PACKAGE = OWNER.parent/'OldSCS3Portables/Guard Experiment 20260929-023325-a2fa'
 EXE = PACKAGE/'Runtime/Swordcraft3CustomRendererBeta.exe'
 ACCEPTED = ROOT.parent/'custom-renderer'
 

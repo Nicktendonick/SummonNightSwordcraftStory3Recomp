@@ -15,7 +15,7 @@ import benchmark_presentation_filters as b
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--old',type=Path,default=b.OWNER/'release/Guard Experiment 20260929-023325-a2fa/Runtime/Swordcraft3CustomRendererBeta.exe')
+    parser.add_argument('--old',type=Path,default=b.OWNER.parent/'OldSCS3Portables/Guard Experiment 20260929-023325-a2fa/Runtime/Swordcraft3CustomRendererBeta.exe')
     parser.add_argument('--new',type=Path,default=b.ROOT/'build-native/Swordcraft3CustomRendererBeta.exe')
     parser.add_argument('--frames',type=int,default=600)
     parser.add_argument('--widths',type=int,nargs='+',choices=[240,384],default=[240,384])

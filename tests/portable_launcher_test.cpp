@@ -80,6 +80,43 @@ static void test_guard_mod(const fs::path& root) {
     std::cout << "PASS: built-in Mods visibility, on/off, restart persistence, strict parsing, failure safety\n";
 }
 
+static void test_organized_settings() {
+    struct Choice { int value=0; bool available=true; bool accept=true; } choice;
+    const char* choices[] = {"Current", "Bounded", "Follow + edge stops"};
+    RecompLauncherCBuiltinMod setting{
+        "camera", "Battle framing", "Help", &choice,
+        [](void* p) { return static_cast<Choice*>(p)->value; },
+        [](void* p, int v) { auto& c=*static_cast<Choice*>(p); if(!c.accept) return 0; c.value=v; return 1; },
+        nullptr, "Graphics", choices, 3,
+        [](void* p) { return static_cast<Choice*>(p)->available ? 1 : 0; }};
+    RecompLauncherCGameInfo gi{};
+    gi.builtin_mods=&setting; gi.builtin_mod_count=1;
+    RecompLauncherCSettings settings{};
+    auto model=std::make_unique<LauncherModel>();
+    launcher_model_init(model.get(), &settings, &gi, nullptr);
+    CHECK(!model->organized_settings);
+    launcher_model_set_view(model.get(), LNG_VIEW_GRAPHICS);
+    CHECK(model->view == LNG_VIEW_DASHBOARD);
+    gi.organized_settings=1;
+    launcher_model_init(model.get(), &settings, &gi, nullptr);
+    const auto original=model->s;
+    for(auto view : {LNG_VIEW_GRAPHICS, LNG_VIEW_AUDIO, LNG_VIEW_MODS, LNG_VIEW_CONTROLLER, LNG_VIEW_DASHBOARD}) {
+        launcher_model_set_view(model.get(),view);
+        CHECK(model->view==view && std::string(launcher_view_name(view))!="?");
+    }
+    CHECK(std::string(launcher_view_name(LNG_VIEW_GRAPHICS))=="Graphics");
+    CHECK(std::string(launcher_view_name(LNG_VIEW_AUDIO))=="Audio");
+    CHECK(launcher_model_set_builtin_value(model.get(),0,2) && choice.value==2);
+    for(int invalid : {-1,3,200}) CHECK(!launcher_model_set_builtin_value(model.get(),0,invalid));
+    CHECK(choice.value==2);
+    choice.available=false;
+    CHECK(!launcher_model_set_builtin_value(model.get(),0,1) && choice.value==2);
+    choice.available=true; choice.accept=false;
+    CHECK(!launcher_model_set_builtin_value(model.get(),0,1) && choice.value==2);
+    CHECK(std::memcmp(&original,&model->s,sizeof(original))==0);
+    std::cout << "PASS: opt-in UI routing, camera choice validation, availability and rejected writes preserve settings\n";
+}
+
 static void test_graphics_presets(const fs::path& root) {
     using namespace swordcraft3;
     using namespace gbarecomp_seam;
@@ -404,6 +441,7 @@ static void test_presentation_filters(const fs::path& root) {
 }
 
 int main(int argc, char** argv) {
+    test_organized_settings();
     const auto root = fs::current_path() / "validation/pt" /
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     const auto portable = root / "Portable Game";

@@ -2,6 +2,7 @@
 #include "gba_raster_capture.h"
 #include "gba_render_primitives.h"
 #include "gba_window_policy.h"
+#include "battle_camera.h"
 #include <array>
 
 namespace swordcraft3 {
@@ -11,6 +12,7 @@ namespace swordcraft3 {
 // image to paste over this one.
 struct CombatRenderStats {
     unsigned rows=0,center_columns=0,extended_columns=0,affine_rows=0;
+    unsigned edge_columns=0,edge_rows=0;
 };
 class CombatFrameRenderer {
     static unsigned u16(const std::uint8_t* p) { return gba::text_u16(p); }
@@ -32,14 +34,17 @@ public:
         return true;
     }
     static bool draw(const gba::GbaRasterCapture& capture,std::uint8_t* output,unsigned width,
-                     const gba::GbaReplayViewPolicy& source,CombatRenderStats& stats) {
+                     const gba::GbaReplayViewPolicy& source,CombatRenderStats& stats,
+                     const BattleFraming* framing=nullptr,unsigned scenery_begin=160) {
         stats={};
         if(!output || width<240 || width>384 || !supported(capture)) return false;
-        const unsigned left=(width-240)/2;
         for(unsigned y=0;y<160;++y) {
+            const bool bounded=framing && framing->bounded && y>=scenery_begin && y<125;
+            const unsigned left=bounded?framing->anchor:(width-240)/2;
             const auto& row=*capture.line(y);
             const auto* io=row.io.data(); const auto* vram=row.vram.data(); const auto* oam=row.oam.data();
             const unsigned display=row.dispcnt,mode=display&7;
+            bool decorated_row=false;
             std::array<gba::render::Stack,384> stacks{};
             std::array<gba::render::Candidate,384> objects{};
             std::array<bool,384> obj_window{};
@@ -49,7 +54,10 @@ public:
             if(display&0x1000) for(unsigned n=0;n<128;++n) {
                 const int raw=int(u16(oam+n*8+2)&511);
                 int x=raw>=256?raw-512:raw;
-                if(source.obj_x) source.obj_x(raw,&x);
+                if(framing && framing->object_wrap && y>=scenery_begin && y<125)
+                    x=raw>=int(framing->object_wrap)?raw-512:raw;
+                else if(bounded) x=raw>=int(512-64-left)?raw-512:raw;
+                else if(source.obj_x) source.obj_x(raw,&x);
                 const auto object=gba::render::object(oam,n,x);
                 if(!object.valid || int(y)<object.y || int(y)>=object.y+object.box_height) continue;
                 const int begin=std::max(0,object.x+int(left)),end=std::min(int(width),object.x+int(left)+object.box_width);
@@ -117,6 +125,15 @@ public:
             }
             for(unsigned sx=0;sx<width;++sx) {
                 const int x=int(sx)-int(left);
+                if(bounded && (sx<framing->begin || sx>=framing->end)) {
+                    const auto edge=battle_edge_column(width,*framing,sx);
+                    // Forced blank stays white. HUD, terrain, OBJ and effects
+                    // inside [begin,end) never pass through this decoration.
+                    const bool decorate=!(display&0x80) && edge.band!=BattleEdgeBand::None;
+                    gba::render::rgb(decorate?battle_edge_color(edge):0x7fff,output+(y*width+sx)*3);
+                    if(decorate) { ++stats.edge_columns; decorated_row=true; }
+                    continue;
+                }
                 if((controls[sx]&16) && (gba::g_ppu_debug_layer_mask&16) &&
                     gba::detail::replay_margin_layer_allowed(margin_mask,4,x,240) &&
                     (!source.clip_objects || (x>=0 && x<240))) stacks[sx].submit(objects[sx]);
@@ -127,6 +144,7 @@ public:
                 gba::render::rgb((display&0x80)?0x7fff:color,output+(y*width+sx)*3);
             }
             ++stats.rows; stats.center_columns+=240; stats.extended_columns+=width-240;
+            if(decorated_row) ++stats.edge_rows;
         }
         return true;
     }

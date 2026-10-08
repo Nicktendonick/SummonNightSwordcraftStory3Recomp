@@ -1,7 +1,9 @@
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include "host_window.h"
+#include "debug_capture_policy.h"
 #include "recomp_runtime_ui.h"
+#include "../recomp-ui/src/common/recomp_runtime_ui_internal.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -68,6 +70,57 @@ int main() {
     auto sample = [&]() {
         SDL_JoystickUpdate(); return window.pump();
     };
+    // F10 must work without enabling debugger F2..F9 or taking over save slots.
+    auto capture_env = [](const char* name, const char* value) {
+#ifdef _WIN32
+        _putenv_s(name, value);
+#else
+        if (*value) setenv(name, value, 1); else unsetenv(name);
+#endif
+    };
+    auto hotkey = [&](SDL_Keycode key, Uint16 mods = 0, int repeat = 0) {
+        SDL_Event e{};
+        e.type = SDL_KEYDOWN;
+        e.key.keysym.sym = key;
+        e.key.keysym.scancode = SDL_GetScancodeFromKey(key);
+        e.key.keysym.mod = mods;
+        e.key.repeat = repeat;
+        CHECK(SDL_PushEvent(&e) == 1);
+        auto event = sample();
+        e.type = SDL_KEYUP;
+        CHECK(SDL_PushEvent(&e) == 1);
+        sample();
+        return event;
+    };
+    CHECK(!gbarecomp::debug_capture_enabled(false, nullptr));
+    CHECK(!gbarecomp::debug_capture_enabled(false, ""));
+    CHECK(gbarecomp::debug_capture_enabled(false, "Captures/test"));
+    CHECK(gbarecomp::debug_capture_enabled(true, nullptr));
+    CHECK(gbarecomp::debug_capture_enabled(true, ""));
+    capture_env("GBARECOMP_VISIBLE_DEBUGGER", "");
+    capture_env("GBARECOMP_DEBUG_CAPTURE_DIR", "");
+    CHECK(!hotkey(SDLK_F10).debug_export);
+    capture_env("GBARECOMP_DEBUG_CAPTURE_DIR", "Captures/test");
+    CHECK(hotkey(SDLK_F10).debug_export);
+    CHECK(!hotkey(SDLK_F10, 0, 1).debug_export); // holding F10 is not a capture flood
+    CHECK(!sample().debug_export);
+    for (SDL_Keycode key = SDLK_F1; key <= SDLK_F9; ++key) {
+        const int slot = key - SDLK_F1 + 1;
+        auto load = hotkey(key);
+        CHECK(load.load_slot == slot && load.save_slot == 0);
+        CHECK(load.debug_layer_mask == -1 && !load.debug_step_frame && !load.toggle_pause);
+        auto save = hotkey(key, KMOD_SHIFT);
+        CHECK(save.save_slot == slot && save.load_slot == 0);
+    }
+    capture_env("GBARECOMP_VISIBLE_DEBUGGER", "0");
+    CHECK(hotkey(SDLK_F10).debug_export);
+    capture_env("GBARECOMP_DEBUG_CAPTURE_DIR", "");
+    CHECK(!hotkey(SDLK_F10).debug_export);
+    capture_env("GBARECOMP_VISIBLE_DEBUGGER", "1");
+    CHECK(hotkey(SDLK_F10).debug_export);
+    CHECK(hotkey(SDLK_F3).debug_layer_mask == 1);
+    CHECK(hotkey(SDLK_F9).debug_step_frame);
+    capture_env("GBARECOMP_VISIBLE_DEBUGGER", "");
     SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_A, 1);
     CHECK((sample().keyinput & 1) != 0); // original A mapping no longer active
     SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_A, 0);
@@ -92,8 +145,8 @@ int main() {
     window.set_runtime_ui(ui);
     auto keyboard = [&](SDL_Scancode code, int repeat = 0) {
         SDL_Event e{}; e.type=SDL_KEYDOWN; e.key.keysym.scancode=code; e.key.repeat=repeat;
-        CHECK(SDL_PushEvent(&e)==1); sample();
-        e.type=SDL_KEYUP; e.key.repeat=0; CHECK(SDL_PushEvent(&e)==1); sample();
+        CHECK(SDL_PushEvent(&e)==1); CHECK(!sample().quit);
+        e.type=SDL_KEYUP; e.key.repeat=0; CHECK(SDL_PushEvent(&e)==1); CHECK(!sample().quit);
     };
     auto controller = [&](Uint8 button) {
         SDL_Event e{}; e.type=SDL_CONTROLLERBUTTONDOWN; e.cbutton.button=button;
@@ -112,6 +165,66 @@ int main() {
     controller(SDL_CONTROLLER_BUTTON_A); controller(SDL_CONTROLLER_BUTTON_GUIDE);
     CHECK(!recomp_runtime_ui_confirmation_pending(ui) && recomp_runtime_ui_is_open(ui));
     controller(SDL_CONTROLLER_BUTTON_GUIDE); CHECK(!recomp_runtime_ui_is_open(ui));
+    // No Resume item: Escape still closes straight from a nested section.
+    keyboard(SDL_SCANCODE_ESCAPE); keyboard(SDL_SCANCODE_RETURN);
+    CHECK(ui->in_section);
+    keyboard(SDL_SCANCODE_ESCAPE); CHECK(!recomp_runtime_ui_is_open(ui));
+    window.set_runtime_ui(nullptr);
+    recomp_runtime_ui_destroy(ui);
+    struct MenuState { RecompRuntimeUi* ui{}; bool paused = false; int resumed = 0; int destructive = 0; } state;
+    menu.features = RECOMP_RUNTIME_UI_STANDARD_RESUME | RECOMP_RUNTIME_UI_STANDARD_PAUSE |
+        RECOMP_RUNTIME_UI_STANDARD_RESET | RECOMP_RUNTIME_UI_STANDARD_CLOSE |
+        RECOMP_RUNTIME_UI_STANDARD_FULLSCREEN | RECOMP_RUNTIME_UI_STANDARD_VOLUME;
+    menu.menu.callbacks.context = &state;
+    menu.menu.callbacks.run_action = [](void* p, const RecompRuntimeUiItem* item) {
+        auto& s = *static_cast<MenuState*>(p);
+        const std::string key = item->key;
+        if (key == RECOMP_RUNTIME_UI_KEY_RESUME) {
+            s.paused = false; ++s.resumed; recomp_runtime_ui_close(s.ui);
+        } else if (key == RECOMP_RUNTIME_UI_KEY_PAUSE) s.paused = true;
+        else ++s.destructive;
+        return 1;
+    };
+    ui = recomp_runtime_ui_create_standard(&menu); CHECK(ui); state.ui = ui;
+    window.set_runtime_ui(ui);
+    // Top level and every actual section, both ordinary and explicit Pause.
+    for (int section = -1; section < static_cast<int>(ui->section_count); ++section) {
+        for (bool paused : {false, true}) {
+            keyboard(SDL_SCANCODE_ESCAPE); CHECK(recomp_runtime_ui_is_open(ui));
+            if (section >= 0) recomp_runtime_ui_enter_section(ui, section);
+            if (paused) CHECK(recomp_runtime_ui_activate(ui, RECOMP_RUNTIME_UI_KEY_PAUSE));
+            CHECK(state.paused == paused);
+            const int resumed = state.resumed;
+            keyboard(SDL_SCANCODE_ESCAPE, 1);
+            CHECK(recomp_runtime_ui_is_open(ui) && state.resumed == resumed);
+            keyboard(SDL_SCANCODE_ESCAPE);
+            CHECK(!recomp_runtime_ui_is_open(ui) && !state.paused && state.resumed == resumed + 1);
+            keyboard(SDL_SCANCODE_ESCAPE, 1);
+            CHECK(!recomp_runtime_ui_is_open(ui) && state.resumed == resumed + 1);
+        }
+    }
+    for (const char* key : {RECOMP_RUNTIME_UI_KEY_RESET, RECOMP_RUNTIME_UI_KEY_CLOSE}) {
+        keyboard(SDL_SCANCODE_ESCAPE);
+        CHECK(recomp_runtime_ui_activate(ui, RECOMP_RUNTIME_UI_KEY_PAUSE));
+        CHECK(recomp_runtime_ui_activate(ui, key));
+        CHECK(recomp_runtime_ui_confirmation_pending(ui));
+        keyboard(SDL_SCANCODE_ESCAPE);
+        CHECK(!recomp_runtime_ui_confirmation_pending(ui) && recomp_runtime_ui_is_open(ui));
+        CHECK(state.paused && state.destructive == 0);
+        keyboard(SDL_SCANCODE_ESCAPE);
+        CHECK(!state.paused && !recomp_runtime_ui_is_open(ui));
+    }
+    keyboard(SDL_SCANCODE_ESCAPE); recomp_runtime_ui_enter_section(ui, 0);
+    controller(SDL_CONTROLLER_BUTTON_B);
+    CHECK(recomp_runtime_ui_is_open(ui) && !ui->in_section); // controller Back unchanged
+#if defined(RECOMP_RUNTIME_UI_HAS_TEXT)
+    ui->editing_text = 1; // model the text backend owning this key
+    const int resumed = state.resumed;
+    keyboard(SDL_SCANCODE_ESCAPE);
+    CHECK(recomp_runtime_ui_is_open(ui) && state.resumed == resumed);
+    ui->editing_text = 0;
+#endif
+    keyboard(SDL_SCANCODE_ESCAPE); CHECK(!recomp_runtime_ui_is_open(ui));
     window.set_audio_enabled(true); CHECK(window.audio_enabled());
     window.set_game_paused(true); CHECK(window.audio_enabled()); // pause is not a mute preference
     window.set_audio_enabled(false); window.set_game_paused(false); CHECK(!window.audio_enabled());

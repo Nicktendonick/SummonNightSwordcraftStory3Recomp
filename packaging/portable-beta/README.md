@@ -1,6 +1,10 @@
 # Swordcraft Story 3 — Portable Beta
 
-Windows x64. Local release candidate; publication review is still open.
+Windows x64. Portable UI test build; publication review is still open.
+
+This build includes the reorganized launcher and Esc menu. Please test it in a
+new folder and report your Windows version, selected language, graphics settings,
+controller, and steps to reproduce any problem.
 
 ## Start here
 
@@ -11,7 +15,7 @@ Windows x64. Local release candidate; publication review is still open.
    original filenames; originals remain unchanged. Different files with the
    same name get a readable suffix such as `Game (2).gba`.
 4. **Japanese needs no translation patch.** For English, optionally select your
-   compatible English-beta BPS in **Mods** and enable it. An already-translated
+   released **Hajimari_no_Ishi_v1.0.6.f.bps** in **Mods** and enable it. An already-translated
    ROM matching this build can also be selected directly.
 5. Press **Play**. Press **Esc** during play for the in-game menu.
 
@@ -51,10 +55,17 @@ Use the game's save command for a normal battery save. Home > Import copies an
 existing battery save into this installation; it does not use the external file
 in place. Save states and rewind are separate features.
 
-Home shows the selected game language and its battery-save path. Japanese uses
+Home shows the selected game language; expand **Game files** for full paths and
+BIOS options. Japanese uses
 `Saves/japanese.eep` and `Save States/japanese.state1` through `.state10`.
-English keeps the existing `Saves/battery.eep` and `Save States/beta.state1`
-through `.state10`. Switching language does not overwrite or convert saves.
+Released English uses `Saves/english-1.0.6f.eep` and
+`Save States/english-1.0.6f.state1` through `.state10`.
+Earlier released-English saves remain under their versioned names; save states
+are bound to their exact ROM and are not automatically converted on upgrade.
+Old beta `battery.eep` and `beta.state*` files are preserved, not automatically
+loaded or converted. Do not use old beta save states with the released patch.
+Battery-save compatibility has not been established; keep a backup and use
+Import only if you deliberately want to test one. Switching language does not overwrite saves.
 Select the intended language before importing a battery save. Do not exchange
 save states between languages. The launcher interface itself remains in English.
 
@@ -62,10 +73,17 @@ With the original Japanese ROM selected, disable the patch in **Mods** to play
 Japanese again. Disabling a patch cannot undo an already-translated ROM: select
 the original Japanese ROM with **Change ROM** in that case.
 
-The Esc menu offers **Pause**, **Resume**, **Reset game** and **Close game**.
+This package no longer runs the retired English beta translation. The internal
+engine filename still contains `Beta` for starter compatibility; its English
+code and ROM verification are for release **1.0.6.f**.
+
+The Esc menu offers **Pause**, **Resume**, **Reset game** and **Quit game**.
 Choose whether opening the menu automatically pauses play. Reset/Close ask for
 confirmation; unsaved progress can be lost. State compatibility across future
 builds is not guaranteed, so keep ordinary in-game saves too.
+
+The bottom **Resume** button resumes gameplay even after a manual pause.
+Controls and Mods are configured in the launcher, not inside Esc.
 
 ## Optional dedicated Guard
 
@@ -84,7 +102,43 @@ Guard Test launcher is needed. Change Select's keyboard/gamepad bindings in
 
 ## Visual filters
 
-Start with **Graphics preset** in **Settings > Display** or **Esc > Graphics**.
+### Optional battle framing experiment
+
+Use **Graphics > Battle View > Battle framing** in the launcher or Esc.
+Choose **Current**, **Bounded**, or **Follow + edge stops**. **Current** is the
+default and restores the existing centered widescreen presentation.
+
+**Bounded view** shifts the captured gameplay view inward at both ends of the
+original camera's logical range. It keeps the HUD centered and never stretches
+or zooms the characters. At 12:5, reviewed arenas use 368 gameplay columns with
+an 8-column warm brown-and-gold border with an inset shadow on each side. This
+decoration stays outside the scenery and never shades fighters or the HUD.
+At 16:9 it follows within the bounds without adding a border over scenery. Original
+GBA mode, field maps and unsupported arenas retain their current presentation.
+Locked camera sequences and out-of-range camera shake also retain the current view.
+
+**Follow + edge stops** keeps the original centered widescreen framing away
+from the edges, then shifts all gameplay layers together to stay inside the
+near-scenery source bounds on both sides. At 12:5 it uses a fixed 346-column
+opening with a 19-column border/shadow frame on each side. Characters are not
+stretched or zoomed. At 16:9 it uses the whole 284-column opening. This does not
+invent missing art or guarantee that intentionally transparent scenery is filled.
+Both experiments cover reviewed arenas 0, 2, 3 and 7; other arenas retain their
+existing fallback. Locked/special scenes and out-of-envelope raster schedules
+retain Current framing.
+
+These options are mutually exclusive. Choose **Current** to restore the
+original view. **Cover scenery edges** requires **Follow + edge stops** and
+covers the reviewed rocky arena's scenery cutoffs; other arenas are unchanged.
+
+This is a framing experiment, not a rewrite of the original perspective camera:
+its parallax and perspective movement are retained. The setting applies on
+Resume, survives reopening/reset, and lives in `Settings/battle-camera.ini`.
+Toggle it off at any time if you prefer the previous view.
+
+### Filter presets
+
+Start with **Graphics preset** under **Graphics > Picture** in the launcher or Esc.
 You do not need to configure each filter separately:
 
 | Preset | Look | Combination |
@@ -103,7 +157,7 @@ the label automatically becomes **Custom** when the combination differs.
 Choosing a named preset again reapplies its recipe. Changes survive Reset Game
 and reopening the launcher. There is no extra preset file to manage.
 
-**Game aspect ratio** is available in **Settings > Display** and **Esc > Graphics**:
+**Aspect ratio** is available under **Graphics > Window & Screen** in the launcher or Esc:
 Original GBA (3:2), Widescreen (16:9), or Ultrawide (12:5). Switch during play;
 when paused, the new view takes effect on Resume. The choice also survives
 Reset Game and reopening the launcher. Existing installations keep their
@@ -115,13 +169,13 @@ The game's native simulation and camera remain unchanged. Unsupported scenes
 keep their native framing. Changing aspect does not resize the desktop window;
 unused space is letterboxed. Window scale/fullscreen remain separate controls.
 
-Choose filters in **Settings**, or change them during play in **Esc > Graphics**.
+Choose filters under **Graphics > Picture** in the launcher or Esc.
 Scaling offers **Nearest**, **Linear**, **Sharp fractional**, and **Smooth 2x**.
 Screen effects offer **Off**, **LCD Grid**, and **CRT**, with adjustable intensity.
 The existing screen-colour presets can be combined with these options.
 
-**Screen model** is now available in both **Settings > Display** and
-**Esc > Graphics**: Raw, Unlit, Frontlit, Backlit and Classic. This changes game
+**Colour profile** is available under **Graphics > Picture** in the launcher or
+Esc: Raw, Unlit, Frontlit, Backlit and Classic. This changes game
 colours immediately, including while paused; launcher/Esc text stays unchanged.
 It is independent of scaling, effects, graphics presets and aspect ratio.
 The choice is saved in Settings/launcher.ini and survives Reset Game and
@@ -150,7 +204,7 @@ Required input SHA-1 identities:
 
 - Japanese ROM: `3f5253fcf57e07ce52472bd29a61d16b98a12376`
 - GBA BIOS: `300c20df6731a33952ded8c436f7f186d25d3492`
-- Translated output: `bb2eebf98deb59bb6218442c2308bb5033ae2915`
+- Translated output (1.0.6.f): `6753a22a096b8adaa3a869333b99fcfe29ba1fec`
 
 A newer translation may require a new executable. No compiler or self-healing
 cache is included; untested dynamic-code paths remain a limitation.
