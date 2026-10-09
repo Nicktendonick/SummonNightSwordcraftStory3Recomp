@@ -8,6 +8,8 @@
 #include "custom_battle_identity.h"
 #include "custom_battle_spell_window.h"
 #include "combat_frame_renderer.h"
+#include "battle_follow_camera.h"
+#include "battle_scenery_edges.h"
 #include "runtime.h"
 #include <cstring>
 #include <cstdlib>
@@ -23,6 +25,12 @@ class CustomBattleScene {
     unsigned top_end_=19;
     bool window_trace_=false;
     bool full_frame_=false;
+    int camera_mode_=0;
+    unsigned arena_width_=0;
+    bool authored_near_maps_=false;
+    bool cover_edges_=false;
+    BattleFraming framing_{};
+    BattleFollowResult follow_{};
     CombatRenderStats render_stats_{};
     std::array<BattleSpellWindow,160> spell_windows_{};
     mutable std::array<unsigned,160> effect_left_samples_{},effect_right_samples_{};
@@ -71,7 +79,7 @@ class CustomBattleScene {
             const int camera=hofs>=384 ? int(hofs)-512 : int(hofs);
             // Reviewed new arena headers declare 384x160; the 512-wide VRAM
             // allocation includes padding, not additional authored terrain.
-            const int near_width=battle_uses_authored_384(scene.state_.arena) ? 384 : 512;
+            const int near_width=int(scene.near_source_width());
             if(x+camera<0 || x+camera>=near_width) return -1;
             *out=x; return 1; // finite near map, never mirrored or looped
         }
@@ -170,11 +178,18 @@ public:
     unsigned top_end() const { return top_end_; }
     bool full_frame() const { return full_frame_; }
     const CombatRenderStats& render_stats() const { return render_stats_; }
+    void camera_mode(int mode) { camera_mode_=mode; }
+    void authored_near_maps(bool enabled) { authored_near_maps_=enabled; }
+    void cover_edges(bool enabled) { cover_edges_=enabled; }
+    unsigned near_source_width() const { return battle_near_source_width(state_.arena,authored_near_maps_); }
+    const BattleFraming& framing() const { return framing_; }
+    const BattleFollowResult& follow() const { return follow_; }
     void capture(const gbarecomp::ExtendedViewFrameInfo& m,const BattleState& state,bool owned) {
         reset();
         const char* trace=std::getenv("SWORDCRAFT3_BATTLE_WINDOW_TRACE");
         window_trace_=trace && !std::strcmp(trace,"1");
         state_=state;
+        arena_width_=0;
         const char* enabled=std::getenv("SWORDCRAFT3_CUSTOM_BATTLES");
         if(!enabled || std::strcmp(enabled,"1")) { decline_="disabled"; return; }
         if(!owned) { decline_="no-battle-owner"; return; }
@@ -189,10 +204,12 @@ public:
             decline_="rocky-disabled"; return;
         }
         active_=true; decline_="none";
+        if(m.rom && m.rom_size>=0xb80418)
+            arena_width_=u16(m.rom+0xb801cc+state.arena*28+4);
     }
     bool draw(const gba::GbaRasterCapture& raster,const std::uint8_t* native,
               std::uint8_t* output,unsigned width) {
-        full_frame_=false; render_stats_={};
+        full_frame_=false; render_stats_={}; framing_={}; follow_={};
         if(window_trace_) { effect_left_samples_.fill(0); effect_right_samples_.fill(0); }
         if(!active_ || !raster.complete() || width<=240 || width>384) return false;
         const auto& first=*raster.line(0);
@@ -229,7 +246,32 @@ public:
         const auto policy=view_policy();
         const char* full=std::getenv("SWORDCRAFT3_FULL_COMBAT_RENDERER");
         if(full && !std::strcmp(full,"1")) {
-            full_frame_=CombatFrameRenderer::draw(raster,output,width,policy,render_stats_);
+            framing_=battle_framing(width,state_.camera,arena_width_,camera_mode_==1 && state_.camera_mode==0);
+            if(camera_mode_==2) {
+                int h_min=512,h_max=-512,h_flat=-1;
+                unsigned near_rows=0,flat_rows=0;
+                bool coherent_flat=true;
+                // Read the completed row state that the compositor consumes.
+                // Do not use the next scheduled scroll buffer or guess pixels.
+                for(unsigned y=top_end_;y<125;++y) {
+                    const auto& row=*raster.line(y);
+                    if((row.dispcnt&0x80) || !(row.dispcnt&0x100)) continue;
+                    const unsigned raw=u16(row.io.data()+0x10)&511;
+                    const int h=raw>=384 ? int(raw)-512 : int(raw);
+                    h_min=std::min(h_min,h); h_max=std::max(h_max,h); ++near_rows;
+                    if(y<96) {
+                        if(flat_rows && h!=h_flat) coherent_flat=false;
+                        h_flat=h; ++flat_rows;
+                    }
+                }
+                const bool ordinary=near_rows && arena_width_==384 &&
+                    state_.camera_mode==0 && state_.camera>=0 && state_.camera<=128;
+                follow_=battle_follow_framing(width,h_min,h_max,
+                    ordinary && flat_rows && coherent_flat ? h_flat : -1);
+                framing_=battle_scenery_cover(follow_,width,state_.arena,
+                    cover_edges_ && authored_near_maps_);
+            }
+            full_frame_=CombatFrameRenderer::draw(raster,output,width,policy,render_stats_,&framing_,top_end_);
             decline_=full_frame_?"none":"full-compositor-unsupported";
             return full_frame_;
         }

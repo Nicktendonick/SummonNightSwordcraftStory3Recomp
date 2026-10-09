@@ -158,6 +158,18 @@ public:
             checked_rom_=memory.rom; checked_rom_size_=memory.rom_size;
             const auto hash=gba::sha1(memory.rom,memory.rom_size).hex();
             supported_rom_=hash=="3f5253fcf57e07ce52472bd29a61d16b98a12376" || hash=="bb2eebf98deb59bb6218442c2308bb5033ae2915";
+#if defined(SWORDCRAFT3_RELEASE105_TRANSLATION)
+            // Isolated release test only. validate_translation105.py checks
+            // unchanged field producers/consumers; the one changed literal is
+            // a translated expiry-message pointer, not a field layout change.
+            // Keep all live source/ownership/animation gates below intact.
+            supported_rom_=supported_rom_ || hash=="06a9f4db52f40a7034dc1c74161a705f30edb858";
+#endif
+#if defined(SWORDCRAFT3_RELEASE106_TRANSLATION)
+            // Supplied 1.0.6.f differs only at ROM offset 0x17f32ea; the
+            // audited field producers/consumers, maps and animation are intact.
+            supported_rom_=supported_rom_ || hash=="6753a22a096b8adaa3a869333b99fcfe29ba1fec";
+#endif
             sources_.reset(); animation_sources_.reset();
         }
         if(!supported_rom_) { decline_="field-rom-revision"; return false; }

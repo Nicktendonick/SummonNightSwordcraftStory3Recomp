@@ -5,7 +5,30 @@ Monogatari - Hajimari no Ishi** (Game Boy Advance, Japan), built with
 [`gbarecomp`](https://github.com/mstan/gbarecomp) and the
 [`recomp-ui`](https://github.com/mstan/recomp-ui) launcher.
 
-## Current beta checkpoint — September 26, 2026
+## Pre-cleanup source checkpoint — October 8, 2026
+
+This is a source backup, **not a new portable release or a clean-clone build
+certification**. The working-build source and SDL2 experiment are saved on
+separate checkpoint branches. See [checkpoint scope and known build blockers](docs/SOURCE_CHECKPOINT_20261008.md).
+
+## Current portable work — September 30, 2026
+
+The portable packaging recipe now uses the released **English translation
+1.0.6.f**, alongside original Japanese. The retired English-beta translation
+is not part of the current package. Released-English saves have separate paths
+so an upgrade does not automatically reuse old beta states.
+
+Optional **Bounded** and **Follow + edge stops** experiments are available in
+launcher Mods and Esc Graphics. Current framing remains the clean-install
+default. Follow keeps the centered widescreen anchor in the middle and stops
+at both near-scenery bounds, with fixed side framing at 12:5 and no zoom.
+Unsupported scenes retain their fallback. The separate private camera test
+defaults to Follow; preparing it does not update the installed Portable Beta.
+See [Follow scope and verification](docs/FOLLOW_EDGE_CAMERA.md),
+[Bounded scope and limitations](docs/BOUNDED_BATTLE_VIEW.md) and the
+[current portable instructions](packaging/portable-beta/README.md).
+
+### September 26 checkpoint
 
 This branch contains the complete-frame custom renderer for supported overworld
 and combat scenes, the selective performance backport, and the native themed

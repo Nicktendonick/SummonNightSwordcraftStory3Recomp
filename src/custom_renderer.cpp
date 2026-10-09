@@ -5,6 +5,8 @@
 #include "custom_field_scene.h"
 #include "custom_field_objects.h"
 #include "custom_battle_scene.h"
+#include "guard_experiment.h"
+#include "ram_write_override.h"
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
@@ -24,6 +26,19 @@ swordcraft3::BattleSpellDisplayEpoch spell_display_epoch;
 void (*previous_entry_hook)(std::uint32_t)=nullptr;
 bool battle_hook_supported=false, state_trace=false;
 bool battle_spell_window_supported=false;
+bool guard_enabled=false, guard_supported=false, guard_trace=false;
+int battle_camera_mode=0;
+bool battle_edge_cover=false;
+bool bounded_camera_supported=false,follow_camera_supported=false;
+swordcraft3::GuardExperiment guard_context() {
+    return {guard_enabled && guard_supported, memory.iwram, memory.iwram_size};
+}
+bool guard_write(std::uint32_t pc,std::uint32_t address,unsigned size,
+        std::uint32_t original,std::uint32_t* value) {
+    const bool changed=guard_context().write(pc,address,size,original,g_cpu.R[4],value);
+    if(changed && guard_trace) std::fprintf(stderr,"[sc3:guard] preserve-slot=%u\n",*value);
+    return changed;
+}
 unsigned battle_hook_calls=0;
 void battle_entry(std::uint32_t pc) {
     if(previous_entry_hook) previous_entry_hook(pc);
@@ -56,6 +71,11 @@ bool field_objects_enabled() {
 }
 int field_object_read(std::uint32_t pc,std::uint32_t address,std::uint32_t size,
         std::uint32_t original,std::uint32_t* value) {
+    if(guard_enabled && guard_context().read(pc,address,size,original,g_cpu.R[4],value)) {
+        if(guard_trace && original!=*value)
+            std::fprintf(stderr,"[sc3:guard] read pc=%08x original=%08x value=%08x\n",pc,original,*value);
+        return 1;
+    }
     const unsigned bit=swordcraft3::field_draw_visible_bit(pc);
     if(!bit || size!=2 || !value || (original&bit) || !field_objects_enabled()) return 0;
     const bool resources=pc==0x0809F01Eu;
@@ -89,7 +109,32 @@ int field_object_limit(std::uint32_t pc,std::uint32_t original,std::uint32_t* va
     if(battle.active() && ((pc==0x08009B9E && original==239) || (pc==0x08009BB4 && original==64))) {
         const char* objects=std::getenv("SWORDCRAFT3_CUSTOM_OBJECTS");
         if(objects && !std::strcmp(objects,"0")) return 0;
-        *value=original+(host_width-240)/2; return 1;
+        const char* full_combat=std::getenv("SWORDCRAFT3_FULL_COMBAT_RENDERER");
+        if(battle_camera_mode==2 && follow_camera_supported && full_combat && !std::strcmp(full_combat,"1")) {
+            // Constant union of every admissible Follow view, also containing
+            // Current fallback. No next-frame camera prediction/epoch needed.
+            const auto range=swordcraft3::battle_follow_object_range(host_width);
+            if(range.enabled) {
+                *value=pc==0x08009B9E ? unsigned(range.right_inclusive) : unsigned(-range.left_exclusive);
+                return 1;
+            }
+        }
+        // Keep the submitted coordinate interval asymmetric with the view.
+        // Extending BOTH sides by the maximum shift admits >512 coordinates:
+        // then positive and wrapped-negative OAM X become indistinguishable.
+        unsigned anchor=(host_width-240)/2;
+        if(battle_camera_mode==1 && bounded_camera_supported && memory.iwram &&
+           memory.iwram_size>=0x1aa3 && memory.rom && memory.rom_size>=0xb80418) {
+            const auto arena=memory.iwram[0x1a94];
+            if(arena==battle.state().arena && memory.iwram[0x1aa2]==0) {
+                const auto f=swordcraft3::battle_framing(host_width,
+                    static_cast<std::int16_t>(gba::text_u16(memory.iwram+0x1a98)),
+                    gba::text_u16(memory.rom+0xb801cc+arena*28+4),true);
+                if(f.bounded) anchor=f.anchor;
+            }
+        }
+        *value=pc==0x08009B9E ? host_width-anchor-1 : 64+anchor;
+        return 1;
     }
     if(!field_objects_enabled()) return 0;
     if((pc==0x080091CE && original==239) || (pc==0x080091E0 && original==64)) {
@@ -119,11 +164,21 @@ void reset_host() {
     spell_display_epoch.reset();
     if(capture) capture->reset();
 }
+void change_host_width(std::uint16_t width) {
+    if (width != 240 && width != 284 && width != 384) return;
+    host_width = width;
+    reset_host();
+}
 void observe(const gba::NativeRasterLineContext& line) {
     if(line.y==0 && host_width>240) {
         swordcraft3::BattleState state;
         const bool owned=battle_state.latch(memory.iwram,memory.iwram_size,state);
-        lake.capture(memory); battle.capture(memory,state,owned);
+        lake.capture(memory);
+        battle.camera_mode(battle_camera_mode==2 ? (follow_camera_supported?2:0) :
+                           (battle_camera_mode==1 && bounded_camera_supported?1:0));
+        battle.authored_near_maps(follow_camera_supported);
+        battle.cover_edges(battle_edge_cover);
+        battle.capture(memory,state,owned);
     }
     battle.capture_spell_window(line,memory,battle_spell_window_supported,spell_display_epoch);
     capture->capture(line);
@@ -168,8 +223,21 @@ void present(std::uint8_t* stock, std::size_t bytes) {
             complete_frame_ready=wide_ready && battle.full_frame();
             if(state_trace) {
                 const auto& stats=battle.render_stats();
-                std::fprintf(stderr,"[sc3:composition] completed=%u complete_owner=%u rows=%u center=%u extended=%u affine_rows=%u\n",
-                    completed_frames,unsigned(complete_frame_ready),stats.rows,stats.center_columns,stats.extended_columns,stats.affine_rows);
+                std::fprintf(stderr,"[sc3:composition] completed=%u complete_owner=%u rows=%u center=%u extended=%u affine_rows=%u edge_columns=%u edge_rows=%u\n",
+                    completed_frames,unsigned(complete_frame_ready),stats.rows,stats.center_columns,stats.extended_columns,stats.affine_rows,stats.edge_columns,stats.edge_rows);
+                const auto& f=battle.framing();
+                const auto& follow=battle.follow();
+                std::fprintf(stderr,"[sc3:battle-camera] completed=%u enabled=%u supported=%u active=%u camera=%d anchor=%u begin=%u end=%u origin=%d width=%u camera_setting=%d h_min=%d h_max=%d source_width=%u object_wrap=%u h_flat=%d envelope_min=%d envelope_max=%d\n",
+                    completed_frames,unsigned(battle_camera_mode!=0),unsigned(battle_camera_mode==2?follow_camera_supported:bounded_camera_supported),
+                    unsigned(complete_frame_ready && f.bounded),battle.state().camera,f.anchor,f.begin,f.end,f.origin,host_width,
+                    battle_camera_mode,follow.h_min,follow.h_max,battle.near_source_width(),f.object_wrap,
+                    follow.h_flat,follow.envelope_min,follow.envelope_max);
+                std::fprintf(stderr,"[sc3:battle-cover] completed=%u enabled=%u active=%u arena=%u anchor=%u base_begin=%u base_end=%u begin=%u end=%u flat=%d\n",
+                    completed_frames,unsigned(battle_edge_cover),
+                    unsigned(complete_frame_ready && follow.active &&
+                        (f.begin!=follow.framing.begin || f.end!=follow.framing.end)),
+                    battle.state().arena,f.anchor,follow.framing.begin,follow.framing.end,
+                    f.begin,f.end,follow.h_flat);
             }
             battle.trace_raster(*capture,completed_frames);
             if(wide_ready) ++battle_frames; else ++fallback_frames;
@@ -196,7 +264,11 @@ void initialize(const gbarecomp::ExtendedViewFrameInfo* frame) {
     if(g_runtime_fn_entry_hook!=battle_entry) {
         previous_entry_hook=g_runtime_fn_entry_hook;
         battle_hook_supported=swordcraft3::battle_hook_rom_supported(memory.rom,memory.rom_size);
+        bounded_camera_supported=swordcraft3::battle_camera_rom_supported(memory.rom,memory.rom_size);
+        follow_camera_supported=swordcraft3::battle_follow_rom_supported(memory.rom,memory.rom_size);
         battle_spell_window_supported=swordcraft3::battle_spell_window_rom_supported(memory.rom,memory.rom_size);
+        guard_supported=guard_enabled && swordcraft3::guard_rom_supported(memory.rom,memory.rom_size);
+        if(guard_enabled) std::fprintf(stderr,"[sc3:guard] Hold Select to Guard; authenticated=%u\n",unsigned(guard_supported));
         g_runtime_fn_entry_hook=battle_entry;
         if(state_trace) std::fprintf(stderr,"[sc3:state-hook] installed supported=%u\n",unsigned(battle_hook_supported));
     }
@@ -205,11 +277,31 @@ void initialize(const gbarecomp::ExtendedViewFrameInfo* frame) {
     gba::g_native_frame_presenter=present;
     g_runtime_thumb_alu_imm_override=field_object_limit;
     g_runtime_bus_read_override=field_object_read;
+    gbarecomp::ram_write_override=guard_enabled && guard_supported ? guard_write : nullptr;
 }
+}
+void set_swordcraft3_select_guard(bool enabled) {
+    guard_enabled = enabled;
+    std::fprintf(stderr, "[sc3:guard] preference=%s\n", enabled ? "on" : "off");
+}
+void set_swordcraft3_battle_camera_mode(int mode) {
+    battle_camera_mode=mode>=0 && mode<=2?mode:0;
+    // A live switch invalidates the old retained presentation, including rewind.
+    reset_host();
+    std::fprintf(stderr,"[sc3:battle-camera] preference=%s\n",battle_camera_mode==2?"follow-edge":battle_camera_mode==1?"bounded":"current");
+}
+void set_swordcraft3_battle_edge_cover(bool enabled) {
+    battle_edge_cover=enabled;
+    reset_host();
+    std::fprintf(stderr,"[sc3:battle-cover] preference=%s\n",enabled?"on":"off");
 }
 void configure_swordcraft3_custom_renderer(gbarecomp::RunOptions& opts) {
     const char* mode=std::getenv("SWORDCRAFT3_CUSTOM_RENDERER");
     if (!mode || std::strcmp(mode,"1")) return;
+    const char* guard=std::getenv("SWORDCRAFT3_SELECT_GUARD");
+    guard_enabled=guard && !std::strcmp(guard,"1");
+    const char* guard_log=std::getenv("SWORDCRAFT3_GUARD_TRACE");
+    guard_trace=guard_log && !std::strcmp(guard_log,"1");
     host_width=0;
     if(const char* width=std::getenv("SWORDCRAFT3_CUSTOM_HOST_WIDTH")) {
         char* end=nullptr; const long parsed=std::strtol(width,&end,10);
@@ -234,4 +326,18 @@ void configure_swordcraft3_custom_renderer(gbarecomp::RunOptions& opts) {
     opts.host_presentation_width=std::uint16_t(host_width);
     opts.host_frame_renderer=host_width>240 ? draw_host : nullptr;
     opts.host_frame_reset=reset_host;
+    // Reuse the established 284-column 16:9 approximation at 160 rows. The
+    // wider scanout is still host-only; native guest PPU stays 240x160.
+    if (const char* portable = std::getenv("SWORDCRAFT3_BETA_LAUNCHER"); portable && !std::strcmp(portable,"1")) {
+        static const char* const labels[] = {"Original GBA (3:2)", "Widescreen (16:9)", "Ultrawide (12:5)"};
+        static const std::uint16_t widths[] = {240, 284, 384};
+        opts.launcher_aspect_labels = labels;
+        opts.launcher_aspect_view_widths = widths;
+        opts.launcher_num_aspects = 3;
+        opts.launcher_default_aspect = host_width == 384 ? 2 : host_width == 284 ? 1 : 0;
+        opts.launcher_aspects_host_only = true;
+        opts.launcher_expose_widescreen = true;
+        opts.host_frame_renderer = draw_host;
+        opts.host_frame_set_width = change_host_width;
+    }
 }

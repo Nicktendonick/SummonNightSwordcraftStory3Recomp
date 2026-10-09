@@ -9,6 +9,8 @@ namespace swordcraft3 {
 struct BattleState {
     unsigned phase=0, mode=0, pause=0, arena=0, variant=0;
     unsigned top_switch=0, hud_cnt=0, scenery_cnt=0;
+    int camera=0;
+    unsigned camera_mode=0;
     bool enabled=false;
 };
 inline unsigned battle_read16(const std::uint8_t* p) {
@@ -31,6 +33,8 @@ inline bool read_battle_state(const std::uint8_t* ram,std::size_t size,
     out.phase=battle_read32(ram+0x6ab4);
     out.mode=ram[0xc]; out.pause=ram[0xf]; out.arena=ram[0x1a94];
     out.variant=variant; out.enabled=battle_read32(ram+0x1a90)==1;
+    out.camera=static_cast<std::int16_t>(battle_read16(ram+0x1a98));
+    out.camera_mode=ram[0x1aa2];
     out.hud_cnt=battle_read16(ram+0x1d2c);
     out.scenery_cnt=battle_read16(ram+0x1d2e);
     out.top_switch=battle_read16(ram+0x1d30);
@@ -39,6 +43,11 @@ inline bool read_battle_state(const std::uint8_t* ram,std::size_t size,
 inline bool battle_uses_authored_384(unsigned arena) {
     // Reviewed 08031420 asset headers: IDs 2 and 7 have 384x160 near/far maps.
     return arena==2 || arena==7;
+}
+inline unsigned battle_near_source_width(unsigned arena,bool audited_rom) {
+    // Near-map headers for 0/2/3/7 are 384x160 in the exact audited releases.
+    // Keep this separate from the 2/7 additional-area/backdrop-repeat policy.
+    return battle_uses_authored_384(arena) || (audited_rom && (arena==0 || arena==3)) ? 384 : 512;
 }
 inline bool battle_state_supported(const BattleState& s) {
     // Do not key eligibility to normal/airborne/ability/pause submodes. The

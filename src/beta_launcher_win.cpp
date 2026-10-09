@@ -60,7 +60,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR command,int) {
         const auto bios=root/L"BIOS/gba_bios.bin";
         const auto config=packaged ? runtime/L"game.toml" : lab/L"native-test.toml";
         const auto save=root/L"Saves/battery.eep";
-        for(const auto& path:{exe,config,exe.parent_path()/L"SDL2.dll",
+        for(const auto& path:{exe,config,exe.parent_path()/L"Swordcraft3Japanese.exe",exe.parent_path()/L"SDL2.dll",
                               exe.parent_path()/L"libstdc++-6.dll",exe.parent_path()/L"libgcc_s_seh-1.dll",
                               exe.parent_path()/L"libwinpthread-1.dll"})
             if(!fs::is_regular_file(path)) throw std::runtime_error("Missing beta input or runtime file: "+path.string());
@@ -75,6 +75,9 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR command,int) {
             CloseHandle(mutex); return 0;
         }
         clean_experiment_environment();
+#if defined(SWORDCRAFT3_GUARD_EXPERIMENT)
+        SetEnvironmentVariableW(L"SWORDCRAFT3_SELECT_GUARD",L"1");
+#endif
         for (const auto* folder : {L"Settings",L"Saves",L"Save States",L"ROMs",L"BIOS",L"Mods",L"Captures",L"Logs"})
             fs::create_directories(root/folder);
         // Fail visibly if the selected portable directory is read-only.
@@ -139,8 +142,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR command,int) {
         STARTUPINFOW startup{}; startup.cb=sizeof(startup); startup.dwFlags=STARTF_USESTDHANDLES;
         startup.hStdOutput=log; startup.hStdError=log; startup.hStdInput=input;
         PROCESS_INFORMATION process{};
-        auto args=quote(exe)+L" --window --launcher --view-width 240 --save "
-                 +quote(save)+L" "+quote(config);
+        auto args=quote(exe)+L" --window --launcher --view-width 240 "+quote(config);
         const BOOL started=CreateProcessW(exe.c_str(),args.data(),nullptr,nullptr,TRUE,CREATE_NO_WINDOW,
                                           nullptr,play.c_str(),&startup,&process);
         const auto error=GetLastError();

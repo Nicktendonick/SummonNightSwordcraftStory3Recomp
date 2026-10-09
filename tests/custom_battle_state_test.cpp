@@ -15,6 +15,13 @@ int main() {
     check(read_battle_state(ram.data(),ram.size(),0x03001a90,0,s));
     check(battle_state_supported(s));
     check(s.phase==4 && s.mode==2 && s.arena==0 && s.top_switch==18);
+    put16(0x1a98,128); ram[0x1aa2]=2;
+    check(read_battle_state(ram.data(),ram.size(),0x03001a90,0,s));
+    check(s.camera==128 && s.camera_mode==2);
+    put16(0x1a98,0xffff); ram[0x1aa2]=0;
+    check(read_battle_state(ram.data(),ram.size(),0x03001a90,0,s));
+    check(s.camera==-1 && s.camera_mode==0);
+    put16(0x1a98,0);
     check(!read_battle_state(nullptr,ram.size(),0x03001a90,0,s));
     check(!read_battle_state(ram.data(),0x6ac3,0x03001a90,0,s));
     check(!read_battle_state(ram.data(),ram.size(),0x03001a94,0,s));
@@ -33,6 +40,8 @@ int main() {
         s.arena=id;
         check(battle_state_supported(s)==(id==0 || id==2 || id==3 || id==7));
         check(battle_uses_authored_384(id)==(id==2 || id==7));
+        check(battle_near_source_width(id,false)==((id==2 || id==7)?384u:512u));
+        check(battle_near_source_width(id,true)==((id==0 || id==2 || id==3 || id==7)?384u:512u));
     }
     s.arena=0;
     s.enabled=false; check(!battle_state_supported(s)); s.enabled=true;

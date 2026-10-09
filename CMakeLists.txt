@@ -29,9 +29,14 @@ if(WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/beta/beta.ico")
     configure_file(assets/beta/beta-icon.rc.in "${CMAKE_BINARY_DIR}/beta-icon.rc" @ONLY)
     add_executable(Swordcraft3BetaLauncher WIN32 src/beta_launcher_win.cpp "${CMAKE_BINARY_DIR}/beta-icon.rc")
     set_target_properties(Swordcraft3BetaLauncher PROPERTIES OUTPUT_NAME "Swordcraft Story 3 Beta")
+    add_executable(Swordcraft3GuardLauncher WIN32 src/beta_launcher_win.cpp "${CMAKE_BINARY_DIR}/beta-icon.rc")
+    set_target_properties(Swordcraft3GuardLauncher PROPERTIES OUTPUT_NAME "Swordcraft Story 3 Guard Test")
+    target_compile_definitions(Swordcraft3GuardLauncher PRIVATE SWORDCRAFT3_GUARD_EXPERIMENT=1)
+    target_link_libraries(Swordcraft3GuardLauncher PRIVATE user32)
     target_link_libraries(Swordcraft3BetaLauncher PRIVATE user32)
     if(MINGW)
         target_link_options(Swordcraft3BetaLauncher PRIVATE -municode -static -static-libgcc -static-libstdc++)
+        target_link_options(Swordcraft3GuardLauncher PRIVATE -municode -static -static-libgcc -static-libstdc++)
     endif()
 endif()
 
@@ -129,6 +134,44 @@ endif()
 gbarecomp_stage_mingw_runtime(SummonNightSwordcraftStory3Recomp)
 
 if(BUILD_TESTING)
+    add_executable(swordcraft3_battle_camera_tests tests/battle_camera_test.cpp)
+    target_include_directories(swordcraft3_battle_camera_tests PRIVATE src)
+    target_link_libraries(swordcraft3_battle_camera_tests PRIVATE gbarecomp_gba)
+    add_test(NAME swordcraft3_battle_camera_tests COMMAND swordcraft3_battle_camera_tests)
+    add_executable(swordcraft3_battle_follow_camera_tests tests/battle_follow_camera_test.cpp)
+    target_include_directories(swordcraft3_battle_follow_camera_tests PRIVATE src)
+    target_link_libraries(swordcraft3_battle_follow_camera_tests PRIVATE gbarecomp_gba)
+    add_test(NAME swordcraft3_battle_follow_camera_tests COMMAND swordcraft3_battle_follow_camera_tests)
+    add_executable(swordcraft3_battle_camera_preferences_tests tests/battle_camera_preferences_test.cpp)
+    target_include_directories(swordcraft3_battle_camera_preferences_tests PRIVATE src)
+    add_test(NAME swordcraft3_battle_camera_preferences_tests COMMAND swordcraft3_battle_camera_preferences_tests)
+    add_executable(swordcraft3_guard_tests tests/guard_experiment_test.cpp)
+    target_include_directories(swordcraft3_guard_tests PRIVATE src gbarecomp/src/runtime)
+    add_test(NAME swordcraft3_guard_tests COMMAND swordcraft3_guard_tests)
+    add_executable(swordcraft3_presentation_preferences_tests tests/presentation_preferences_test.cpp)
+    target_include_directories(swordcraft3_presentation_preferences_tests PRIVATE gbarecomp/src/runtime)
+    add_test(NAME swordcraft3_presentation_preferences_tests COMMAND swordcraft3_presentation_preferences_tests)
+    add_executable(swordcraft3_presentation_filters_tests tests/presentation_filters_test.cpp gbarecomp/src/runtime/presentation_filters.cpp)
+    target_include_directories(swordcraft3_presentation_filters_tests PRIVATE gbarecomp/src)
+    add_test(NAME swordcraft3_presentation_filters_tests COMMAND swordcraft3_presentation_filters_tests)
+    add_executable(swordcraft3_presentation_scalar_tests tests/presentation_filters_test.cpp gbarecomp/src/runtime/presentation_filters.cpp)
+    target_include_directories(swordcraft3_presentation_scalar_tests PRIVATE gbarecomp/src)
+    target_compile_definitions(swordcraft3_presentation_scalar_tests PRIVATE GBARECOMP_PRESENTATION_SCALAR=1)
+    add_test(NAME swordcraft3_presentation_scalar_tests COMMAND swordcraft3_presentation_scalar_tests)
+    add_executable(swordcraft3_portable_language_tests tests/portable_language_test.cpp)
+    target_include_directories(swordcraft3_portable_language_tests PRIVATE src "${GBARECOMP_ROOT}/src/gba")
+    target_link_libraries(swordcraft3_portable_language_tests PRIVATE gbarecomp_gba)
+    add_test(NAME swordcraft3_portable_language_tests COMMAND swordcraft3_portable_language_tests)
+    add_executable(swordcraft3_release105_language_tests tests/portable_language_test.cpp)
+    target_include_directories(swordcraft3_release105_language_tests PRIVATE src "${GBARECOMP_ROOT}/src/gba")
+    target_compile_definitions(swordcraft3_release105_language_tests PRIVATE SWORDCRAFT3_RELEASE105_TRANSLATION=1)
+    target_link_libraries(swordcraft3_release105_language_tests PRIVATE gbarecomp_gba)
+    add_test(NAME swordcraft3_release105_language_tests COMMAND swordcraft3_release105_language_tests)
+    add_executable(swordcraft3_release106_language_tests tests/portable_language_test.cpp)
+    target_include_directories(swordcraft3_release106_language_tests PRIVATE src "${GBARECOMP_ROOT}/src/gba")
+    target_compile_definitions(swordcraft3_release106_language_tests PRIVATE SWORDCRAFT3_RELEASE106_TRANSLATION=1)
+    target_link_libraries(swordcraft3_release106_language_tests PRIVATE gbarecomp_gba)
+    add_test(NAME swordcraft3_release106_language_tests COMMAND swordcraft3_release106_language_tests)
     if(SWORDCRAFT3_RECOMP_UI)
         add_executable(swordcraft3_runtime_menu_tests tests/runtime_menu_test.cpp)
         target_include_directories(swordcraft3_runtime_menu_tests PRIVATE
@@ -271,6 +314,128 @@ set(SWORDCRAFT3_BETA_BPS "" CACHE FILEPATH
 set(SWORDCRAFT3_STOCK_ROM
     "${CMAKE_CURRENT_SOURCE_DIR}/roms/swordcraft3_jp.gba" CACHE FILEPATH
     "Verified Japanese Swordcraft Story 3 ROM used for private code generation")
+
+# Portable Japanese engine: generate its own verified corpus, never reuse the
+# English translation's instructions. Generated files remain in the build tree.
+option(SWORDCRAFT3_PORTABLE_JAPANESE "Build the portable Japanese engine" OFF)
+if(SWORDCRAFT3_PORTABLE_JAPANESE)
+    set(sc3_jp_dir "${CMAKE_BINARY_DIR}/generated-japanese")
+    set(sc3_jp_sources "${sc3_jp_dir}/dispatch_table.cpp")
+    foreach(shard RANGE 0 31)
+        if(shard LESS 10)
+            set(padded "00${shard}")
+        else()
+            set(padded "0${shard}")
+        endif()
+        list(APPEND sc3_jp_sources "${sc3_jp_dir}/recompiled_${padded}.cpp")
+    endforeach()
+    add_custom_command(OUTPUT ${sc3_jp_sources} "${sc3_jp_dir}/recompiled.h"
+        COMMAND $<TARGET_FILE:gba_recompile> --rom "${SWORDCRAFT3_STOCK_ROM}"
+            --config "${CMAKE_CURRENT_SOURCE_DIR}/symbols/swordcraft3_jp.toml"
+            --symbols "${CMAKE_CURRENT_SOURCE_DIR}/symbols/imported_symbols.tsv"
+            --out "${sc3_jp_dir}"
+        DEPENDS gba_recompile "${SWORDCRAFT3_STOCK_ROM}"
+            symbols/swordcraft3_jp.toml symbols/imported_symbols.tsv VERBATIM)
+    add_library(swordcraft3_japanese_guest OBJECT ${sc3_jp_sources})
+    target_include_directories(swordcraft3_japanese_guest PRIVATE "${sc3_jp_dir}"
+        "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/armv4t"
+        "${GBARECOMP_ROOT}/src/gba")
+    if(MINGW)
+        # Private generated debug symbols are huge and aren't shipped.
+        target_compile_options(swordcraft3_japanese_guest PRIVATE -g0)
+    endif()
+    add_executable(Swordcraft3Japanese src/main.cpp src/custom_renderer.cpp
+        src/adaptive_widescreen.cpp src/swordcraft3_true_map.cpp
+        $<TARGET_OBJECTS:swordcraft3_japanese_guest>)
+    target_include_directories(Swordcraft3Japanese PRIVATE src
+        "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/armv4t"
+        "${GBARECOMP_ROOT}/src/gba" "${GBARECOMP_ROOT}/src/debug")
+    target_link_libraries(Swordcraft3Japanese PRIVATE swordcraft3_presentation
+        "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
+        gbarecomp_armv4t swordcraft3_launcher_ui "-Wl,--end-group")
+    if(WIN32)
+        target_sources(Swordcraft3Japanese PRIVATE "${CMAKE_BINARY_DIR}/beta-icon.rc")
+        target_link_options(Swordcraft3Japanese PRIVATE "-Wl,--stack,16777216")
+    endif()
+    gbarecomp_stage_mingw_runtime(Swordcraft3Japanese)
+endif()
+
+# Production portable English revision. Historical beta targets below remain
+# available for private regression only; package_portable_release selects this
+# pair, never the old beta instruction corpus. Generate new guest code afresh.
+set(SWORDCRAFT3_RELEASE105_ROM "" CACHE FILEPATH "Private verified historical English 1.0.5.f ROM")
+set(SWORDCRAFT3_RELEASE106_ROM "" CACHE FILEPATH "Private verified English 1.0.6.f ROM (required for portable packaging)")
+foreach(sc3_release IN ITEMS 105 106)
+set(sc3_release_rom "${SWORDCRAFT3_RELEASE${sc3_release}_ROM}")
+if(sc3_release_rom)
+    if(NOT SWORDCRAFT3_PORTABLE_JAPANESE OR NOT SWORDCRAFT3_RECOMP_UI)
+        message(FATAL_ERROR "Release translation test needs Japanese engine and launcher UI")
+    endif()
+    set(sc3_release_dir "${CMAKE_BINARY_DIR}/generated-release${sc3_release}")
+    set(sc3_release_config "${CMAKE_BINARY_DIR}/release${sc3_release}-codegen.toml")
+    if(sc3_release STREQUAL "106")
+        set(sc3_release_sha1 "6753a22a096b8adaa3a869333b99fcfe29ba1fec")
+    else()
+        set(sc3_release_sha1 "06a9f4db52f40a7034dc1c74161a705f30edb858")
+    endif()
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/symbols/swordcraft3_jp.toml" sc3_release_text)
+    string(REPLACE "3f5253fcf57e07ce52472bd29a61d16b98a12376"
+        "${sc3_release_sha1}" sc3_release_text "${sc3_release_text}")
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/symbols/swordcraft3_release${sc3_release}.toml" sc3_release_overrides)
+    string(APPEND sc3_release_text "\n${sc3_release_overrides}")
+    # Preserve timestamps when content is unchanged; unrelated configuration
+    # edits must not regenerate and rebuild all private guest shards.
+    file(GENERATE OUTPUT "${sc3_release_config}" CONTENT "${sc3_release_text}")
+    set(sc3_release_sources "${sc3_release_dir}/dispatch_table.cpp")
+    foreach(shard RANGE 0 31)
+        if(shard LESS 10)
+            set(padded "00${shard}")
+        else()
+            set(padded "0${shard}")
+        endif()
+        list(APPEND sc3_release_sources "${sc3_release_dir}/recompiled_${padded}.cpp")
+    endforeach()
+    add_custom_command(OUTPUT ${sc3_release_sources} "${sc3_release_dir}/recompiled.h"
+        COMMAND $<TARGET_FILE:gba_recompile> --rom "${sc3_release_rom}"
+            --config "${sc3_release_config}" --symbols "${CMAKE_CURRENT_SOURCE_DIR}/symbols/imported_symbols.tsv"
+            --out "${sc3_release_dir}"
+        DEPENDS gba_recompile "${sc3_release_rom}" "${sc3_release_config}"
+            symbols/swordcraft3_jp.toml symbols/swordcraft3_release${sc3_release}.toml symbols/imported_symbols.tsv VERBATIM)
+    add_library(swordcraft3_release${sc3_release}_guest OBJECT ${sc3_release_sources})
+    target_include_directories(swordcraft3_release${sc3_release}_guest PRIVATE "${sc3_release_dir}"
+        "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba")
+    if(MINGW)
+        target_compile_options(swordcraft3_release${sc3_release}_guest PRIVATE -g0)
+    endif()
+    foreach(kind IN ITEMS Translation Japanese)
+        if(kind STREQUAL "Translation")
+            set(guest swordcraft3_release${sc3_release}_guest)
+        else()
+            set(guest swordcraft3_japanese_guest)
+        endif()
+        set(engine Swordcraft3${kind}${sc3_release})
+        add_executable(${engine} src/main.cpp src/custom_renderer.cpp src/adaptive_widescreen.cpp
+            src/swordcraft3_true_map.cpp $<TARGET_OBJECTS:${guest}>)
+        target_include_directories(${engine} PRIVATE src "${GBARECOMP_ROOT}/src/runtime"
+            "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba" "${GBARECOMP_ROOT}/src/debug")
+        target_compile_definitions(${engine} PRIVATE SWORDCRAFT3_RELEASE105_TRANSLATION=1)
+        if(sc3_release STREQUAL "106")
+            target_compile_definitions(${engine} PRIVATE SWORDCRAFT3_RELEASE106_TRANSLATION=1)
+        endif()
+        if(kind STREQUAL "Translation")
+            target_compile_definitions(${engine} PRIVATE SWORDCRAFT3_BETA_BUILD=1)
+        endif()
+        target_link_libraries(${engine} PRIVATE swordcraft3_presentation
+            "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
+            gbarecomp_armv4t swordcraft3_launcher_ui "-Wl,--end-group")
+        if(WIN32)
+            target_sources(${engine} PRIVATE "${CMAKE_BINARY_DIR}/beta-icon.rc")
+            target_link_options(${engine} PRIVATE "-Wl,--stack,16777216")
+        endif()
+        gbarecomp_stage_mingw_runtime(${engine})
+    endforeach()
+endif()
+endforeach()
 
 if(SWORDCRAFT3_BETA_BPS)
     if(NOT EXISTS "${SWORDCRAFT3_BETA_BPS}")
