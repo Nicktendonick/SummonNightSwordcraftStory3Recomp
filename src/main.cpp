@@ -36,7 +36,7 @@ int camera_set(const char* key,int value) {
     if(!key) return 0;
     if(!std::strcmp(key,"swordcraft3.battle_edge_cover")) return battle_camera_preferences.save_cover(value);
     if(std::strcmp(key,"swordcraft3.battle_camera")) return previous_ui_set?previous_ui_set(key,value):0;
-    if(value<0 || value>2) return 0;
+    if(value<0 || value>3) return 0;
     const bool ok=battle_camera_preferences.save(value);
     if(!ok) std::fprintf(stderr,"[sc3:battle-camera] %s\n",battle_camera_preferences.error.c_str());
     return ok;
@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
     gbarecomp::RunOptions opts;
     swordcraft3::GuardPreferences guard_preferences;
 #if defined(SWORDCRAFT3_RECOMP_UI)
-    static const char* const camera_choices[]{"Current", "Bounded", "Follow + edge stops"};
+    static const char* const camera_choices[]{"Current", "Bounded", "Follow + edge stops", "Repeat scenery"};
     RecompLauncherCBuiltinMod built_in_mods[]{ {
         "select-guard", "Hold Select to Guard",
         "Hold Select to guard during manual combat; release to stop. Your R-slot ability stays selected. "
@@ -77,10 +77,11 @@ int main(int argc, char** argv) {
         swordcraft3::GuardPreferences::set, swordcraft3::GuardPreferences::last_error},
         {"battle-camera", "Battle framing",
          "Experimental: Current keeps the existing view. Bounded frames inward. Follow + edge stops tracks within the scenery. "
+         "Repeat scenery fills the whole width by continuing the arena's own tile patterns past its edges. "
          "Reviewed widescreen battles only; field maps and unsupported scenes are unchanged.",
          &battle_camera_preferences,swordcraft3::BattleCameraPreferences::get,
          swordcraft3::BattleCameraPreferences::set,swordcraft3::BattleCameraPreferences::last_error,
-         "Graphics", camera_choices, 3, nullptr},
+         "Graphics", camera_choices, 4, nullptr},
         {"battle-scenery-edge-cover", "Cover scenery edges",
          "Experimental: covers the rocky arena's scenery cutoffs. Requires Follow + edge stops; other arenas are unchanged.",
          &battle_camera_preferences,swordcraft3::BattleCameraPreferences::get_cover,
@@ -97,8 +98,8 @@ int main(int argc, char** argv) {
     camera_item.label="Battle framing";
     camera_item.description=built_in_mods[1].description;
     camera_item.group="Battle View";
-    camera_item.type=RECOMP_RUNTIME_UI_CHOICE; camera_item.maximum=2; camera_item.step=1;
-    camera_item.choices=camera_choices; camera_item.choice_count=3;
+    camera_item.type=RECOMP_RUNTIME_UI_CHOICE; camera_item.maximum=3; camera_item.step=1;
+    camera_item.choices=camera_choices; camera_item.choice_count=4;
     RecompRuntimeUiItem cover_item{};
     cover_item.key="swordcraft3.battle_edge_cover"; cover_item.section="Graphics";
     cover_item.label="Cover scenery edges";

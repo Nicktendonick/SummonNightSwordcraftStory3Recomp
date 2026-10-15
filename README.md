@@ -31,6 +31,9 @@ default. Follow keeps the centered widescreen anchor in the middle and stops
 at both near-scenery bounds, with fixed side framing at 12:5 and no zoom.
 Unsupported scenes retain their fallback. The separate private camera test
 defaults to Follow; preparing it does not update the installed Portable Beta.
+**Repeat scenery** keeps Current's centered view at full width and continues
+the arena's own tile patterns past its edges instead of cropping or framing
+them; see [Repeat scenery](docs/REPEAT_SCENERY_20261009.md).
 See [Follow scope and verification](docs/FOLLOW_EDGE_CAMERA.md),
 [Bounded scope and limitations](docs/BOUNDED_BATTLE_VIEW.md) and the
 [current portable instructions](packaging/portable-beta/README.md).

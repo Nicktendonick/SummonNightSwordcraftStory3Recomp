@@ -49,6 +49,11 @@ inline unsigned battle_near_source_width(unsigned arena,bool audited_rom) {
     // Keep this separate from the 2/7 additional-area/backdrop-repeat policy.
     return battle_uses_authored_384(arena) || (audited_rom && (arena==0 || arena==3)) ? 384 : 512;
 }
+inline unsigned battle_far_source_rows(unsigned arena) {
+    // Reviewed far-map headers (assets 32/34/35/39): forest 0 is 384x256;
+    // 2, 3 and 7 are 384x160. Rows below them are allocation padding.
+    return arena==0 ? 32 : (arena==2 || arena==3 || arena==7) ? 20 : 0;
+}
 inline bool battle_state_supported(const BattleState& s) {
     // Do not key eligibility to normal/airborne/ability/pause submodes. The
     // call of the battle raster scheduler is the scene-ownership proof.
