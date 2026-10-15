@@ -104,6 +104,7 @@ inline bool battle_follow_rom_supported(const std::uint8_t* rom,std::size_t size
     const auto digest=gba::sha1(rom,size).hex();
     return digest=="3f5253fcf57e07ce52472bd29a61d16b98a12376" ||
            digest=="06a9f4db52f40a7034dc1c74161a705f30edb858" ||
-           digest=="6753a22a096b8adaa3a869333b99fcfe29ba1fec";
+           digest=="6753a22a096b8adaa3a869333b99fcfe29ba1fec" ||
+           digest=="99ca58319b050c238b1cb61cbc6db7b418b5472c"; // English 1.1.0.f
 }
 }
