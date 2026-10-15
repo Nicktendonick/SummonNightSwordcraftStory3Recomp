@@ -69,6 +69,27 @@ inline BattleFollowEnvelope battle_follow_envelope(int flat) {
     }();
     return flat>=0 && flat<int(table.size()) ? table[flat] : BattleFollowEnvelope{};
 }
+// The same authenticated scheduler, by source row: rows above the arena's
+// perspective threshold d (ROM arena table byte 3) all use the flat offset
+// Hflat for any vertical camera. Returns those whole tile rows and the Hflat
+// range over every ordinary horizontal C=0..128.
+struct BattleFlatBand {
+    unsigned rows=0;
+    int h_min=0,h_max=0;
+    bool valid=false;
+};
+inline BattleFlatBand battle_flat_band(unsigned d) {
+    BattleFlatBand band;
+    if(d<8 || d>=160) return band;
+    const auto asr6=[](int n) { return n>=0?n/64:-((-n+63)/64); };
+    band.h_min=512; band.h_max=-512;
+    for(int c=0;c<=128;++c) {
+        const int h=c+8+asr6((int(d)-152)*(c-64));
+        band.h_min=std::min(band.h_min,h); band.h_max=std::max(band.h_max,h);
+    }
+    band.rows=d/8; band.valid=true;
+    return band;
+}
 inline BattleFollowResult battle_follow_framing(unsigned width,int h_min,int h_max,int h_flat,bool enabled=true) {
     BattleFollowResult out;
     out.framing=battle_framing(width,0,384,false);

@@ -105,8 +105,9 @@ Guard Test launcher is needed. Change Select's keyboard/gamepad bindings in
 ### Optional battle framing experiment
 
 Use **Graphics > Battle View > Battle framing** in the launcher or Esc.
-Choose **Current**, **Bounded**, or **Follow + edge stops**. **Current** is the
-default and restores the existing centered widescreen presentation.
+Choose **Current**, **Bounded**, **Follow + edge stops**, or **Repeat scenery**.
+**Current** is the default and restores the existing centered widescreen
+presentation.
 
 **Bounded view** shifts the captured gameplay view inward at both ends of the
 original camera's logical range. It keeps the HUD centered and never stretches
@@ -123,9 +124,17 @@ near-scenery source bounds on both sides. At 12:5 it uses a fixed 346-column
 opening with a 19-column border/shadow frame on each side. Characters are not
 stretched or zoomed. At 16:9 it uses the whole 284-column opening. This does not
 invent missing art or guarantee that intentionally transparent scenery is filled.
-Both experiments cover reviewed arenas 0, 2, 3 and 7; other arenas retain their
-existing fallback. Locked/special scenes and out-of-envelope raster schedules
-retain Current framing.
+**Repeat scenery** keeps Current's centered view and uses the whole width with
+no side frame. Past the arena's authored edges, each row of scenery continues
+with the arena's own repeating pattern (for example the forest's trees), and
+the perspective floors continue as a mirror image, the same way their halves
+already meet in the middle. The distant backdrop repeats through its own
+period. Characters, collision and the camera are unchanged; only what is drawn
+in the side margins differs.
+
+All three experiments cover reviewed arenas 0, 2, 3 and 7; other arenas retain
+their existing fallback. Locked/special scenes and out-of-envelope raster
+schedules retain Current framing.
 
 These options are mutually exclusive. Choose **Current** to restore the
 original view. **Cover scenery edges** requires **Follow + edge stops** and

@@ -29,7 +29,7 @@ int main() {
     CHECK(std::filesystem::create_directory(root));
     BattleCameraPreferences p; p.load(root);
     CHECK(p.mode==0 && p.error.empty() && apply_count==0);
-    for(int mode:{0,1,2,1,0}) {
+    for(int mode:{0,1,2,3,1,0}) {
         CHECK(p.save(mode) && p.mode==mode && applied==mode && p.error.empty());
         BattleCameraPreferences q; q.load(root);
         CHECK(q.mode==mode && !q.cover_edges && q.error.empty());
@@ -63,7 +63,7 @@ int main() {
     const int applied_before=applied, count_before=apply_count;
     for(const std::string& bad:{
             "[Launcher]\nbattle_camera_mode=-1\n",
-            "[Launcher]\nbattle_camera_mode=3\n",
+            "[Launcher]\nbattle_camera_mode=4\n",
             "[Launcher]\nbattle_camera_mode=02\n",
             "[Launcher]\nbattle_camera_mode=true\n",
             "[Launcher]\nbattle_camera_mode=2 junk\n",
@@ -91,7 +91,7 @@ int main() {
     write(p.path,"[Launcher]\nbattle_camera_mode=2\n"); p.load(root);
     const auto valid=read(p.path);
     CHECK(p.mode==2 && p.error.empty());
-    CHECK(!p.save(-1) && !p.save(3));
+    CHECK(!p.save(-1) && !p.save(4));
     CHECK(p.mode==2 && read(p.path)==valid && apply_count==count_before);
     CHECK(BattleCameraPreferences::get(&p)==2);
     CHECK(!BattleCameraPreferences::set(&p,99));
@@ -122,5 +122,5 @@ int main() {
     CHECK(std::filesystem::remove(p.path));
     CHECK(std::filesystem::remove(root/"Settings"));
     CHECK(std::filesystem::remove(root));
-    std::cout<<"PASS: camera mode migration, three-mode persistence, unrelated settings preservation, invalid inputs and no failed apply\n";
+    std::cout<<"PASS: camera mode migration, four-mode persistence, unrelated settings preservation, invalid inputs and no failed apply\n";
 }

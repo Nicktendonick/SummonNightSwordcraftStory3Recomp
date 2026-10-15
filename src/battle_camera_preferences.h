@@ -7,7 +7,7 @@ namespace swordcraft3 {
 class BattleCameraPreferences {
 public:
     std::filesystem::path path;
-    // 0: Current; 1: Bounded; 2: Follow + edge stops (experimental).
+    // 0: Current; 1: Bounded; 2: Follow + edge stops; 3: Repeat scenery (experimental).
     int mode=0;
     bool cover_edges=false;
     std::string error;
@@ -42,7 +42,7 @@ public:
                 if(key!="battle_camera_mode" && key!="bounded_battle_camera" && key!="battle_edge_cover") continue;
                 const auto text=trim(line.substr(eq+1));
                 if(key=="battle_camera_mode") {
-                    if(found_mode || (text!="0" && text!="1" && text!="2"))
+                    if(found_mode || (text!="0" && text!="1" && text!="2" && text!="3"))
                         throw std::runtime_error("Invalid battle_camera_mode setting.");
                     found_mode=true; value=text[0]-'0';
                 } else if(key=="bounded_battle_camera") {
@@ -68,7 +68,7 @@ public:
         return persist(mode,value!=0);
     }
     bool persist(int value,bool cover) {
-        if(value<0 || value>2) {
+        if(value<0 || value>3) {
             error="Invalid battle camera mode. Previous choice retained."; return false;
         }
         if(!path.empty()) {
@@ -78,7 +78,7 @@ public:
         }
         std::error_code directory_error;
         if(!path.empty()) std::filesystem::create_directories(path.parent_path(),directory_error);
-        // Old engines do not understand Follow; they safely use Current. Write
+        // Old engines reject Follow/Repeat and safely use Current. Write
         // camera compatibility and edge-cover keys atomically, preserving other settings.
         if(path.empty() || directory_error || !gbarecomp::update_launcher_preferences(path,
                 {"battle_camera_mode","bounded_battle_camera","battle_edge_cover"},{value,value==1?1:0,cover?1:0})) {

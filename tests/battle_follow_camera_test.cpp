@@ -103,6 +103,24 @@ int main(int argc,char** argv) {
             CHECK(result.framing.anchor==battle_follow_framing(width,e.minimum,e.maximum,flat).framing.anchor);
         }
     }
+    // Flat band by source row: every row above d uses Hflat for every ordinary
+    // camera, and Hflat stays inside the band's range. Source y is r+v.
+    for(int d:{128,136,140}) {
+        const auto band=battle_flat_band(unsigned(d));
+        CHECK(band.valid && band.rows==unsigned(d/8));
+        for(int c=0;c<=128;++c) for(int v=0;v<=32;++v) {
+            const int flat=c+8+asr6((d-152)*(c-64));
+            CHECK(flat>=band.h_min && flat<=band.h_max);
+            for(int r=0;r<=124;++r) {
+                if(r+v>=int(band.rows)*8) continue;
+                const int term=r<d-v?d-152:r-(151-v);
+                CHECK(c+8+asr6(term*(c-64))==flat);
+            }
+        }
+    }
+    CHECK(battle_flat_band(128).h_min==32 && battle_flat_band(128).h_max==112);
+    CHECK(battle_flat_band(136).h_min==24 && battle_flat_band(136).h_max==120);
+    for(unsigned d:{0u,7u,160u,255u}) CHECK(!battle_flat_band(d).valid);
     for(unsigned width:{0u,240u,256u,320u,385u}) {
         CHECK(!battle_follow_framing(width,72,72,72).active);
         CHECK(!battle_follow_object_range(width).enabled);
