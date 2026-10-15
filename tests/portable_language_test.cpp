@@ -10,7 +10,10 @@ int main(int argc, char** argv) {
     CHECK(argument_value(args, "--save") == "chosen.eep");
     CHECK(std::string(japanese_language.save) != english_language.save);
     CHECK(std::string(japanese_language.states) != english_language.states);
-#if defined(SWORDCRAFT3_RELEASE106_TRANSLATION)
+#if defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
+    CHECK(std::string(english_language.save) == "Saves/english-1.1.0f.eep");
+    CHECK(std::string(english_language.states) == "Save States/english-1.1.0f");
+#elif defined(SWORDCRAFT3_RELEASE106_TRANSLATION)
     CHECK(std::string(english_language.save) == "Saves/english-1.0.6f.eep");
     CHECK(std::string(english_language.states) == "Save States/english-1.0.6f");
 #elif defined(SWORDCRAFT3_RELEASE105_TRANSLATION)

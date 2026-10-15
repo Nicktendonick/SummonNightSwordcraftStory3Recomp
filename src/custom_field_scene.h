@@ -170,6 +170,11 @@ public:
             // audited field producers/consumers, maps and animation are intact.
             supported_rom_=supported_rom_ || hash=="6753a22a096b8adaa3a869333b99fcfe29ba1fec";
 #endif
+#if defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
+            // English 1.1.0.f: the audited field producer/consumer ranges and
+            // 080A4560 expiry-pointer relocation match reviewed 1.0.5.f.
+            supported_rom_=supported_rom_ || hash=="99ca58319b050c238b1cb61cbc6db7b418b5472c";
+#endif
             sources_.reset(); animation_sources_.reset();
         }
         if(!supported_rom_) { decline_="field-rom-revision"; return false; }

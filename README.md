@@ -18,6 +18,13 @@ The portable packaging recipe now uses the released **English translation
 is not part of the current package. Released-English saves have separate paths
 so an upgrade does not automatically reuse old beta states.
 
+English translation **1.1.0.f** can also be built, as
+`Swordcraft3Translation110`/`Swordcraft3Japanese110`, by setting
+`SWORDCRAFT3_RELEASE110_ROM` to the verified patched ROM (SHA-1
+`99ca58319b050c238b1cb61cbc6db7b418b5472c`). It uses its own
+`english-1.1.0f` save and state paths. The packaging recipe still targets
+1.0.6.f.
+
 Optional **Bounded** and **Follow + edge stops** experiments are available in
 launcher Mods and Esc Graphics. Current framing remains the clean-install
 default. Follow keeps the centered widescreen anchor in the middle and stops

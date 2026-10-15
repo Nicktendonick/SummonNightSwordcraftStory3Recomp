@@ -1,0 +1,11 @@
+# Append to the Japanese base configuration only for English 1.1.0.f.
+# The 1.1.0.f script dispatch instructions/table at 0801262C..08012700 are
+# byte-identical to reviewed 1.0.5.f/1.0.6.f (same SHA-256), so preserve the
+# same guarded metadata.
+[[jump_table]]
+addr = 0x080126C0
+stride = 4
+count = 16
+format = "abs32"
+entries_mode = "thumb"
+name = "release110_script_binary_operators"
