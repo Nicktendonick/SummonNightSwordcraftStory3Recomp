@@ -5,3 +5,4 @@ void configure_swordcraft3_custom_renderer(gbarecomp::RunOptions&);
 void set_swordcraft3_select_guard(bool enabled);
 // 0: Current; 1: Bounded; 2: Follow + edge stops; 3: Repeat scenery (experimental).
 void set_swordcraft3_battle_camera_mode(int mode);
+void set_swordcraft3_battle_edge_cover(bool enabled);

@@ -7,10 +7,9 @@ namespace swordcraft3 {
 // verified battle scheduler/lifecycle and arena guards; the complete raster
 // must still satisfy the HUD schedule and finite scenery source-row bounds.
 // Mode 0/1 retain regular BG0/1. BG2 and scripted BG3 may change independently.
-// A descriptor may omit the far layer (BG1 off) or draw it in front (priority).
 inline bool battle_arena_layout(unsigned display,unsigned bg0,unsigned bg1) {
-    return (display&0x0186)==0x0100 && (display&7)<=1 &&
-           (!(display&0x0200) || (bg1&~3u)==0x4508) && (bg0==0 || bg0==0x470b);
+    return (display&0x0386)==0x0300 && (display&7)<=1 &&
+           bg1==0x450b && (bg0==0 || bg0==0x470b);
 }
 
 // Historical combined whitelist, retained for the existing register regression
@@ -105,31 +104,5 @@ inline int battle_backdrop_x(int x, unsigned hofs, unsigned span) {
     int texture = (x + static_cast<int>(hofs)) % static_cast<int>(span);
     if (texture < 0) texture += static_cast<int>(span);
     return texture - static_cast<int>(hofs);
-}
-
-// Repeat width of arena scenery from its 08B801CC descriptor. Every strip is
-// drawn to tile at the arena width (+4); an absent asset (+1 near, +17 far is
-// 0xff) has none. A far layer without parallax (+20 is 0) is one 240-wide
-// screen; a self-animating one (+19 is 3) tiles through its whole 512-wide
-// ring, exactly as the hardware already wraps it.
-inline unsigned battle_scenery_period(const std::uint8_t* descriptor, unsigned layer) {
-    const unsigned width = descriptor[4] | (descriptor[5] << 8);
-    if (width < 240 || width > 512 || descriptor[layer ? 17 : 1] == 0xff) return 0;
-    if (layer == 0) return width;
-    if (descriptor[19] == 3) return 512;
-    return (descriptor[20] | descriptor[21]) ? width : 240;
-}
-
-struct BattleRepeat { int begin = 0, end = 0; };
-// A strip row is exactly periodic when its map entries repeat at a divisor of
-// its width: such art was drawn to tile, whatever its end columns contain.
-inline bool battle_row_periodic(const std::uint16_t* entries, unsigned columns) {
-    for (unsigned period = 1; period * 2 <= columns; ++period) {
-        if (columns % period) continue;
-        bool match = true;
-        for (unsigned x = period; x < columns && match; ++x) match = entries[x] == entries[x - period];
-        if (match) return true;
-    }
-    return false;
 }
 } // namespace swordcraft3

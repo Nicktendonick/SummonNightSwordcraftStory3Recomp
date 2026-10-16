@@ -6,7 +6,9 @@
 
 static int applied=-1;
 static int apply_count=0;
+static bool applied_cover=false;
 void set_swordcraft3_battle_camera_mode(int value) { applied=value; ++apply_count; }
+void set_swordcraft3_battle_edge_cover(bool value) { applied_cover=value; }
 
 static std::string read(const std::filesystem::path& path) {
     std::ifstream input(path,std::ios::binary);
@@ -30,7 +32,7 @@ int main() {
     for(int mode:{0,1,2,3,1,0}) {
         CHECK(p.save(mode) && p.mode==mode && applied==mode && p.error.empty());
         BattleCameraPreferences q; q.load(root);
-        CHECK(q.mode==mode && q.error.empty());
+        CHECK(q.mode==mode && !q.cover_edges && q.error.empty());
         const auto text=read(p.path);
         CHECK(text.find("battle_camera_mode = "+std::to_string(mode))!=std::string::npos);
         CHECK(text.find("bounded_battle_camera = "+std::to_string(mode==1?1:0))!=std::string::npos);
@@ -49,7 +51,7 @@ int main() {
         CHECK(saved.find("\xef\xbb\xbf; kept\r\n[Launcher]\r\n") == 0);
         CHECK(saved.find("bounded_battle_camera = 0 ; old setting\r\n")!=std::string::npos);
         CHECK(saved.find("select_guard=1\r\n")!=std::string::npos);
-        CHECK(saved.find("battle_camera_mode = 2\r\n[Other]\r\nbattle_camera_mode=99\r\n")!=std::string::npos);
+        CHECK(saved.find("battle_camera_mode = 2\r\nbattle_edge_cover = 0\r\n[Other]\r\nbattle_camera_mode=99\r\n")!=std::string::npos);
     }
     write(p.path,"[Launcher]\nbounded_battle_camera=1\nbattle_camera_mode=2\n");
     p.load(root); CHECK(p.mode==2 && p.error.empty());
@@ -69,6 +71,8 @@ int main() {
             "[Launcher]\nbattle_camera_mode=1\nbattle_camera_mode=1\n",
             "[Launcher]\nbounded_battle_camera=1\nbounded_battle_camera=0\n",
             "[Launcher]\nbattle_camera_mode=2\nbounded_battle_camera=2\n",
+            "[Launcher]\nbattle_camera_mode=2\nbattle_edge_cover=2\n",
+            "[Launcher]\nbattle_camera_mode=2\nbattle_edge_cover=1\nbattle_edge_cover=0\n",
             "[Launcher]\nbounded_battle_camera=2\n",
             "[Launcher]\nbattle_camera_mode=2\n[broken\n",
             "[Other]\nbattle_camera_mode=2\n"}) {
@@ -100,10 +104,15 @@ int main() {
     CHECK(!BattleCameraPreferences::get_choice<1>(&p) && !BattleCameraPreferences::get_choice<2>(&p));
     CHECK(BattleCameraPreferences::set_choice<1>(&p,1) && p.mode==1 && applied==1);
     CHECK(!BattleCameraPreferences::set_choice<2>(&p,2) && p.mode==1 && applied==1);
-    // The retired per-arena mask is ignored, with old files preserved.
-    write(p.path,"[Launcher]\nbattle_camera_mode=2\nbattle_edge_cover=1\n");
-    p.load(root); CHECK(p.mode==2 && p.error.empty());
-    CHECK(p.save(1) && read(p.path).find("battle_edge_cover=1")!=std::string::npos);
+    CHECK(!BattleCameraPreferences::get_cover(&p));
+    CHECK(BattleCameraPreferences::set_cover(&p,1) && p.cover_edges && applied_cover);
+    CHECK(p.mode==1); // cover must not select a different camera
+    CHECK(p.save(2) && p.cover_edges && applied_cover);
+    BattleCameraPreferences cover_reload; cover_reload.load(root);
+    CHECK(cover_reload.mode==2 && cover_reload.cover_edges && cover_reload.error.empty());
+    const auto with_cover=read(p.path);
+    CHECK(!p.save_cover(-1) && !p.save_cover(2) && read(p.path)==with_cover && applied_cover);
+    CHECK(p.save_cover(0) && !p.cover_edges && !applied_cover && p.mode==2);
 
     // A directory in place of the settings file is rejected, never replaced.
     CHECK(std::filesystem::remove(p.path));

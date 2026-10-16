@@ -1,5 +1,6 @@
 #include "combat_frame_renderer.h"
 #include "battle_follow_camera.h"
+#include "battle_scenery_edges.h"
 #include <stdexcept>
 #include <vector>
 #include <cstdio>
@@ -42,6 +43,13 @@ int main() {
         gameplay_anchor=follow.framing.anchor; calls=0;
         check(swordcraft3::CombatFrameRenderer::draw(*capture,output.data(),384,policy,stats,&follow.framing,19));
         check(calls==23040 && stats.edge_columns==38*106 && stats.edge_rows==106);
+        const auto cover=swordcraft3::battle_scenery_cover(follow,384,3,true);
+        calls=0;
+        check(swordcraft3::CombatFrameRenderer::draw(*capture,output.data(),384,policy,stats,&cover,19));
+        check(calls==23040 && stats.edge_rows==106);
+        check(stats.edge_columns==(cover.begin+384-cover.end)*106);
+        for(unsigned x=cover.anchor;x<cover.anchor+240;++x)
+            check(swordcraft3::battle_edge_column(384,cover,x).band==swordcraft3::BattleEdgeBand::None);
     }
     const auto follow_fallback=swordcraft3::battle_follow_framing(384,-1,32,-1);
     gameplay_anchor=72; calls=0;

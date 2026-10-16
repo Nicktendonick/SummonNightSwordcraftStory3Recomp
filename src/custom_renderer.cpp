@@ -28,6 +28,7 @@ bool battle_hook_supported=false, state_trace=false;
 bool battle_spell_window_supported=false;
 bool guard_enabled=false, guard_supported=false, guard_trace=false;
 int battle_camera_mode=0;
+bool battle_edge_cover=false;
 bool bounded_camera_supported=false,follow_camera_supported=false;
 swordcraft3::GuardExperiment guard_context() {
     return {guard_enabled && guard_supported, memory.iwram, memory.iwram_size};
@@ -177,6 +178,7 @@ void observe(const gba::NativeRasterLineContext& line) {
         battle.camera_mode(battle_camera_mode>=2 ? (follow_camera_supported?battle_camera_mode:0) :
                            (battle_camera_mode==1 && bounded_camera_supported?1:0));
         battle.authored_near_maps(follow_camera_supported);
+        battle.cover_edges(battle_edge_cover);
         battle.capture(memory,state,owned);
     }
     battle.capture_spell_window(line,memory,battle_spell_window_supported,spell_display_epoch);
@@ -229,8 +231,14 @@ void present(std::uint8_t* stock, std::size_t bytes) {
                 std::fprintf(stderr,"[sc3:battle-camera] completed=%u enabled=%u supported=%u active=%u camera=%d anchor=%u begin=%u end=%u origin=%d width=%u camera_setting=%d h_min=%d h_max=%d source_width=%u object_wrap=%u h_flat=%d envelope_min=%d envelope_max=%d\n",
                     completed_frames,unsigned(battle_camera_mode!=0),unsigned(battle_camera_mode>=2?follow_camera_supported:bounded_camera_supported),
                     unsigned(complete_frame_ready && f.bounded),battle.state().camera,f.anchor,f.begin,f.end,f.origin,host_width,
-                    battle_camera_mode,follow.h_min,follow.h_max,battle.arena_width(),f.object_wrap,
+                    battle_camera_mode,follow.h_min,follow.h_max,battle.near_source_width(),f.object_wrap,
                     follow.h_flat,follow.envelope_min,follow.envelope_max);
+                std::fprintf(stderr,"[sc3:battle-cover] completed=%u enabled=%u active=%u arena=%u anchor=%u base_begin=%u base_end=%u begin=%u end=%u flat=%d\n",
+                    completed_frames,unsigned(battle_edge_cover),
+                    unsigned(complete_frame_ready && follow.active &&
+                        (f.begin!=follow.framing.begin || f.end!=follow.framing.end)),
+                    battle.state().arena,f.anchor,follow.framing.begin,follow.framing.end,
+                    f.begin,f.end,follow.h_flat);
             }
             if(state_trace) std::fprintf(stderr,"[sc3:battle-repeat-frame] completed=%u setting=%d active=%u near_samples=%u far_samples=%u near_key=%u far_key=%u plans=%u inset_samples=%u left_inset_ok=%u right_inset_ok=%u left_inset=%u right_inset=%u inset_rows=%u inset_lines=%u inset_h_min=%d inset_h_max=%d threshold=%u\n",
                 completed_frames,battle_camera_mode,unsigned(complete_frame_ready && battle.repeat_active()),
@@ -292,6 +300,11 @@ void set_swordcraft3_battle_camera_mode(int mode) {
     reset_host();
     std::fprintf(stderr,"[sc3:battle-camera] preference=%s\n",battle_camera_mode==3?"repeat-scenery":
         battle_camera_mode==2?"follow-edge":battle_camera_mode==1?"bounded":"current");
+}
+void set_swordcraft3_battle_edge_cover(bool enabled) {
+    battle_edge_cover=enabled;
+    reset_host();
+    std::fprintf(stderr,"[sc3:battle-cover] preference=%s\n",enabled?"on":"off");
 }
 void configure_swordcraft3_custom_renderer(gbarecomp::RunOptions& opts) {
     const char* mode=std::getenv("SWORDCRAFT3_CUSTOM_RENDERER");

@@ -85,12 +85,14 @@ def main():
     cfg = configparser.ConfigParser()
     cfg.read(test / "Settings/battle-camera.ini", encoding="utf-8-sig")
     mode = cfg.getint("Launcher", "battle_camera_mode", fallback=0)
+    cover = cfg.getint("Launcher", "battle_edge_cover", fallback=0)
     pages = ("dashboard", "graphics", "audio", "controller", "assist_tools", "mods", "credits")
     navigation = ";".join("view:" + p + ";wait:3;uiprobe" for p in pages)
     env["LNG_SCRIPT"] = (
         "wait:8;" + navigation +
-        ";view:graphics;builtinset:1:0;builtinset:1:1;builtinset:1:2;builtinprobe;"
-        f"builtinset:1:{mode};"
+        ";view:graphics;builtinset:1:0;builtinset:2:1;builtinset:1:1;builtinset:1:2;"
+        "builtinset:2:0;builtinset:2:1;builtinprobe;"
+        f"builtinset:2:{cover};builtinset:1:{mode};"
         "view:mods;builtintoggle:0;builtintoggle:0;romprobe;patchtoggle;romprobe;"
         "patchtoggle;romprobe;play"
     )
@@ -99,14 +101,14 @@ def main():
     english = execute(test / "Runtime/Swordcraft3CustomRendererBeta.exe", args, stage, env, "english")
     for page in ("Dashboard", "Graphics", "Audio", "Controller", "Assist Tools", "Mods", "Credits"):
         assert "[launcher:ui] organized=1 view=" + page + " " in english, page
-    assert "id=battle-scenery-edge-cover" not in english
+    assert "[launcher:builtin-set] index=2 value=1 accepted=0" in english
     for value in (0, 1, 2):
         assert f"[launcher:builtin-set] index=1 value={value} accepted=1" in english
     assert "verified=1 can_play=1 patch=0 language=Japanese" in english
     assert "verified=1 can_play=1 patch=1 language=English (translation 1.0.6.f)" in english
     assert "dispatch_misses=0" in (stage / "english.out").read_text(errors="replace")
     report = {"english": verify_escape(english), "launcher_pages": list(pages),
-              "camera_choices": True, "translation_still_in_mods": True}
+              "camera_choices_and_dependency": True, "translation_still_in_mods": True}
     # Use the same Mods translation switch to launch the Japanese engine.
     env["LNG_SCRIPT"] = "wait:8;view:mods;patchtoggle;romprobe;play"
     japanese = execute(test / "Runtime/Swordcraft3CustomRendererBeta.exe", args, stage, env, "japanese")
