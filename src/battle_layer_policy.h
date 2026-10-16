@@ -7,9 +7,17 @@ namespace swordcraft3 {
 // verified battle scheduler/lifecycle and arena guards; the complete raster
 // must still satisfy the HUD schedule and finite scenery source-row bounds.
 // Mode 0/1 retain regular BG0/1. BG2 and scripted BG3 may change independently.
+// The arena's own backdrop (08031420): BG1 is enabled only with a far asset
+// (descriptor byte 0x11), at the priority in descriptor byte 0x12. Arena 10's
+// is priority 1 (BG1CNT 4509, a foreground in front of the scenery); arena 15
+// has none.
+struct BattleBackdropLayout { bool enabled=true; unsigned cnt=0x450b; };
+inline bool battle_arena_layout(unsigned display,unsigned bg0,unsigned bg1,BattleBackdropLayout far) {
+    if((display&0x0186)!=0x0100 || (display&7)>1 || !(bg0==0 || bg0==0x470b)) return false;
+    return far.enabled ? (display&0x0200) && bg1==far.cnt : !(display&0x0200);
+}
 inline bool battle_arena_layout(unsigned display,unsigned bg0,unsigned bg1) {
-    return (display&0x0386)==0x0300 && (display&7)<=1 &&
-           bg1==0x450b && (bg0==0 || bg0==0x470b);
+    return battle_arena_layout(display,bg0,bg1,{});
 }
 
 // Historical combined whitelist, retained for the existing register regression

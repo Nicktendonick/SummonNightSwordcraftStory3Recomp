@@ -41,18 +41,37 @@ inline bool read_battle_state(const std::uint8_t* ram,std::size_t size,
     return true;
 }
 inline bool battle_uses_authored_384(unsigned arena) {
-    // Reviewed 08031420 asset headers: IDs 2 and 7 have 384x160 near/far maps.
-    return arena==2 || arena==7;
+    // Reviewed 08031420 asset headers (1.1.0f matches the JP ROM): these IDs
+    // have 384x160 near maps (11 and 12 declare none: their near map stays
+    // blank) and a backdrop of declared size (384x160; 14 is 512x256). Arena
+    // 8 (village) is the forest's descriptor family. 1, 4, 5, 6, 9, 11-14 and
+    // 16 use the supported register layout (BG0 470b, BG1 450b, BG2 0305) in
+    // the Oct 15 arena matrix.
+    // 10 and 15 differ only in their backdrop (priority 1; none), which the
+    // layout check takes from the same descriptor.
+    switch(arena) {
+    case 1: case 2: case 4: case 5: case 6: case 7: case 8: case 9: case 10:
+    case 11: case 12: case 13: case 14: case 15: case 16:
+        return true;
+    default:
+        return false;
+    }
 }
 inline unsigned battle_near_source_width(unsigned arena,bool audited_rom) {
-    // Near-map headers for 0/2/3/7 are 384x160 in the exact audited releases.
-    // Keep this separate from the 2/7 additional-area/backdrop-repeat policy.
+    // Near-map headers for 0/3 and the authored IDs are 384x160 in the exact
+    // audited releases. Keep this separate from the additional-area policy.
     return battle_uses_authored_384(arena) || (audited_rom && (arena==0 || arena==3)) ? 384 : 512;
 }
+inline unsigned battle_far_source_width(unsigned arena) {
+    // Far asset 46 (arena 14) declares 512x256; every other reviewed one 384.
+    return arena==14 ? 512 : 384;
+}
 inline unsigned battle_far_source_rows(unsigned arena) {
-    // Reviewed far-map headers (assets 32/34/35/39): forest 0 is 384x256;
-    // 2, 3 and 7 are 384x160. Rows below them are allocation padding.
-    return arena==0 ? 32 : (arena==2 || arena==3 || arena==7) ? 20 : 0;
+    // Reviewed far-map headers: forest 0 and arena 14 are 256 rows high; the
+    // other supported backdrops 160 (arena 15 has none). Rows below them are
+    // allocation padding.
+    if(arena==15) return 0;
+    return (arena==0 || arena==14) ? 32 : (arena==3 || battle_uses_authored_384(arena)) ? 20 : 0;
 }
 inline bool battle_state_supported(const BattleState& s) {
     // Do not key eligibility to normal/airborne/ability/pause submodes. The
