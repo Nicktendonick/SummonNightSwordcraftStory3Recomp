@@ -12,11 +12,13 @@ int main() {
         // Each register combination separates scenery eligibility from effect
         // permission, including disabled/setup/retirement and window changes.
         for(unsigned d=0;d<65536;++d) {
-            const bool arena=(d&7)<=1 && !(d&0x80) && (d&0x300)==0x300;
+            const bool arena=(d&7)<=1 && !(d&0x80) && (d&0x100);
             check(battle_arena_layout(d,0,0x450b)==arena);
             check(battle_arena_layout(d,0x470b,0x450b)==arena);
+            check(battle_arena_layout(d,0x470b,0x4509)==arena); // front far layer
+            check(battle_arena_layout(d,0x470b,0x0605)==(arena && !(d&0x200))); // far absent
             check(!battle_arena_layout(d,1,0x450b));
-            check(!battle_arena_layout(d,0x470b,0x450a));
+            check(battle_arena_layout(d,0x470b,0x440b)==(arena && !(d&0x200)));
         }
         for(unsigned c=0;c<65536;++c) {
             const bool regular=c==0x0305 || c==0x4385;

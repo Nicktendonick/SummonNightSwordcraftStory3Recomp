@@ -1,5 +1,4 @@
 #include "battle_follow_camera.h"
-#include "battle_scenery_edges.h"
 #include <array>
 #include <fstream>
 #include <iostream>
@@ -39,20 +38,6 @@ int main(int argc,char** argv) {
             CHECK(int(f.anchor)==std::clamp(int((width-240)/2),low,high));
             if(stable_anchor==512) stable_anchor=f.anchor;
             CHECK(f.anchor==stable_anchor); // jump extrema must never move it
-            const auto cover=battle_scenery_cover(result,width,3,true);
-            CHECK(cover.anchor==f.anchor && cover.origin==f.origin && cover.object_wrap==f.object_wrap);
-            CHECK(cover.begin>=f.begin && cover.begin<=f.anchor);
-            CHECK(cover.end<=f.end && cover.end>=f.anchor+240);
-            CHECK(cover.end-cover.begin>=240);
-            const auto stable_cover=battle_scenery_cover(
-                battle_follow_framing(width,e.minimum,e.maximum,flat),width,3,true);
-            CHECK(cover.begin==stable_cover.begin && cover.end==stable_cover.end);
-            for(unsigned arena:{0u,1u,2u,4u,7u,255u}) {
-                const auto other=battle_scenery_cover(result,width,arena,true);
-                CHECK(other.begin==f.begin && other.end==f.end && other.anchor==f.anchor);
-            }
-            const auto off_cover=battle_scenery_cover(result,width,3,false);
-            CHECK(off_cover.begin==f.begin && off_cover.end==f.end);
             // Entire visible origin interval of each guest-cull-sized OBJ fits
             // the constant submitted/decoded interval, including both edges.
             CHECK(int(f.begin)-int(f.anchor)-63>objects.left_exclusive);
@@ -63,8 +48,6 @@ int main(int argc,char** argv) {
                                std::pair{e.minimum,e.maximum+1},std::pair{flat+1,flat}}) {
             const auto r=battle_follow_framing(width,pair.first,pair.second,flat);
             CHECK(!r.active && !r.framing.bounded);
-            const auto rejected=battle_scenery_cover(r,width,3,true);
-            CHECK(!rejected.bounded && rejected.begin==r.framing.begin && rejected.end==r.framing.end);
             CHECK(r.framing.object_wrap==objects.wrap_begin);
           }
         }
@@ -136,8 +119,6 @@ int main(int argc,char** argv) {
         }
     }
     CHECK(battle_follow_framing(384,72,72,72).framing.anchor==72);
-    const auto middle_cover=battle_scenery_cover(battle_follow_framing(384,72,72,72),384,3,true);
-    CHECK(middle_cover.begin==32 && middle_cover.end==352 && middle_cover.anchor==72);
     CHECK(battle_follow_framing(384,3,32,32).framing.anchor==22);
     CHECK(battle_follow_framing(384,120,141,120).framing.anchor==122);
     CHECK(!battle_follow_rom_supported(nullptr,0));

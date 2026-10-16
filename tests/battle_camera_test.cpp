@@ -6,7 +6,6 @@
 #define CHECK(x) do { if(!(x)) throw std::runtime_error("Failed: " #x); } while(0)
 static int applied=0;
 void set_swordcraft3_battle_camera_mode(int value) { applied=value; }
-void set_swordcraft3_battle_edge_cover(bool) {}
 int main(int argc,char** argv) {
     using namespace swordcraft3;
     for(unsigned width:{240u,284u,384u}) for(unsigned stage:{384u,512u})

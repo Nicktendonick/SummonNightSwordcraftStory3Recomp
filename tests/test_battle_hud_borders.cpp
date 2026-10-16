@@ -88,6 +88,26 @@ void rendering_tests() {
     CHECK(swordcraft3::battle_repeat_columns(columns.data(),48)==48);
     CHECK(swordcraft3::battle_repeat_columns(nullptr,48)==0);
     CHECK(swordcraft3::battle_backdrop_x(-1,0,160)==159);
+    // Repeat widths come from descriptor fields alone, never an arena ID.
+    std::array<std::uint8_t,28> descriptor{};
+    descriptor[4]=0x80; descriptor[5]=1; descriptor[19]=1; descriptor[20]=40;
+    CHECK(swordcraft3::battle_scenery_period(descriptor.data(),0)==384);
+    CHECK(swordcraft3::battle_scenery_period(descriptor.data(),1)==384);
+    descriptor[20]=0; // far layer fixed to the screen
+    CHECK(swordcraft3::battle_scenery_period(descriptor.data(),1)==240);
+    descriptor[19]=3; // self-animating far ring
+    CHECK(swordcraft3::battle_scenery_period(descriptor.data(),1)==512);
+    CHECK(swordcraft3::battle_scenery_period(descriptor.data(),0)==384);
+    std::array<std::uint16_t,48> row{};
+    for (unsigned x=0; x<48; ++x) row[x]=std::uint16_t(x%16); // tiles every 128px
+    CHECK(swordcraft3::battle_row_periodic(row.data(),48));
+    row[47]=999; // art that stops short of the end does not tile
+    CHECK(!swordcraft3::battle_row_periodic(row.data(),48));
+    descriptor[1]=0xff; descriptor[17]=0xff; // absent assets
+    CHECK(!swordcraft3::battle_scenery_period(descriptor.data(),0) && !swordcraft3::battle_scenery_period(descriptor.data(),1));
+    descriptor[1]=descriptor[17]=0;
+    descriptor[5]=0; // unsupported width: no continuation at all
+    CHECK(!swordcraft3::battle_scenery_period(descriptor.data(),0) && !swordcraft3::battle_scenery_period(descriptor.data(),1));
     CHECK(swordcraft3::battle_backdrop_x(240,40,160)==80);
     for (unsigned width : {241u, 263u, 284u, 320u, 383u, 384u}) {
         for (unsigned left : {0u, (width - 240) / 2, width - 240}) {

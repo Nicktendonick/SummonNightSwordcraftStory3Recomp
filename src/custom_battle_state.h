@@ -57,7 +57,7 @@ inline unsigned battle_far_source_rows(unsigned arena) {
 inline bool battle_state_supported(const BattleState& s) {
     // Do not key eligibility to normal/airborne/ability/pause submodes. The
     // call of the battle raster scheduler is the scene-ownership proof.
-    return s.enabled && s.variant!=3 && (s.arena==0 || s.arena==3 || battle_uses_authored_384(s.arena)) &&
+    return s.enabled && s.variant!=3 && s.arena<21 && // descriptor table at 08B801CC
         s.hud_cnt==0 && s.scenery_cnt==0x470b &&
         s.top_switch>=18 && s.top_switch<=58 && (s.top_switch-18)%8==0;
 }
