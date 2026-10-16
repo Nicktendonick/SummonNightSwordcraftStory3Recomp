@@ -28,22 +28,16 @@ int (*previous_ui_get)(const char*,int*)=nullptr;
 int (*previous_ui_set)(const char*,int)=nullptr;
 int camera_get(const char* key,int* value) {
     if(!key || !value) return 0;
-    if(!std::strcmp(key,"swordcraft3.battle_edge_cover")) { *value=battle_camera_preferences.cover_edges; return 1; }
     if(std::strcmp(key,"swordcraft3.battle_camera")) return previous_ui_get?previous_ui_get(key,value):0;
     *value=battle_camera_preferences.mode; return 1;
 }
 int camera_set(const char* key,int value) {
     if(!key) return 0;
-    if(!std::strcmp(key,"swordcraft3.battle_edge_cover")) return battle_camera_preferences.save_cover(value);
     if(std::strcmp(key,"swordcraft3.battle_camera")) return previous_ui_set?previous_ui_set(key,value):0;
     if(value<0 || value>3) return 0;
     const bool ok=battle_camera_preferences.save(value);
     if(!ok) std::fprintf(stderr,"[sc3:battle-camera] %s\n",battle_camera_preferences.error.c_str());
     return ok;
-}
-int camera_enabled(const char* key) {
-    return !key || std::strcmp(key, "swordcraft3.battle_edge_cover") ||
-           battle_camera_preferences.mode == 2;
 }
 
 void print_usage() {
@@ -82,11 +76,6 @@ int main(int argc, char** argv) {
          &battle_camera_preferences,swordcraft3::BattleCameraPreferences::get,
          swordcraft3::BattleCameraPreferences::set,swordcraft3::BattleCameraPreferences::last_error,
          "Graphics", camera_choices, 4, nullptr},
-        {"battle-scenery-edge-cover", "Cover scenery edges",
-         "Experimental: covers the rocky arena's scenery cutoffs. Requires Follow + edge stops; other arenas are unchanged.",
-         &battle_camera_preferences,swordcraft3::BattleCameraPreferences::get_cover,
-         swordcraft3::BattleCameraPreferences::set_cover,swordcraft3::BattleCameraPreferences::last_error,
-         "Graphics", nullptr, 0, [](void* p) { return static_cast<swordcraft3::BattleCameraPreferences*>(p)->mode == 2 ? 1 : 0; }},
         {"battle-hud-borders", "Battle HUD borders",
          "Extend the battle HUD's decorative borders into the widescreen margins.",
          nullptr,
@@ -100,12 +89,6 @@ int main(int argc, char** argv) {
     camera_item.group="Battle View";
     camera_item.type=RECOMP_RUNTIME_UI_CHOICE; camera_item.maximum=3; camera_item.step=1;
     camera_item.choices=camera_choices; camera_item.choice_count=4;
-    RecompRuntimeUiItem cover_item{};
-    cover_item.key="swordcraft3.battle_edge_cover"; cover_item.section="Graphics";
-    cover_item.label="Cover scenery edges";
-    cover_item.description=built_in_mods[2].description;
-    cover_item.group="Battle View";
-    cover_item.type=RECOMP_RUNTIME_UI_BOOL; cover_item.maximum=1; cover_item.step=1;
 #endif
     std::string original_credits, port_credits, tools_credits, launcher_folder_note; // owns launcher text until exit
     opts.builtin_game_name =
@@ -253,15 +236,13 @@ int main(int argc, char** argv) {
             if (item.key && !std::strcmp(item.key, "swordcraft3.battle_hud_borders")) {
                 item.section = "Graphics";
                 item.group = "Battle View";
-                item.description = built_in_mods[3].description;
+                item.description = built_in_mods[2].description;
             }
         }
-        game_menu_items.insert(game_menu_items.begin(), cover_item);
         game_menu_items.insert(game_menu_items.begin(), camera_item);
         previous_ui_get=opts.ui_get; previous_ui_set=opts.ui_set;
         opts.ui_extra_items=game_menu_items.data(); opts.ui_extra_item_count=game_menu_items.size();
         opts.ui_get=camera_get; opts.ui_set=camera_set;
-        opts.ui_enabled=camera_enabled;
     }
 #endif
     // Native game rendering stays 3:2, but the host window itself may be
@@ -293,7 +274,6 @@ int main(int argc, char** argv) {
     }
     if(!battle_camera_preferences.path.empty()) {
         set_swordcraft3_battle_camera_mode(battle_camera_preferences.mode);
-        set_swordcraft3_battle_edge_cover(battle_camera_preferences.cover_edges);
         if(!battle_camera_preferences.error.empty())
             std::fprintf(stderr,"[sc3:battle-camera] %s\n",battle_camera_preferences.error.c_str());
     }

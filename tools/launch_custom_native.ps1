@@ -79,14 +79,10 @@ try {
             Write-Host 'Unsupported scripted animations/layer modes retain native fallback.'
         }
         if ($env:SWORDCRAFT3_CUSTOM_ADDITIONAL_AREAS -eq '0') {
-            Write-Host 'Previous-area comparison: the new 888x312 and 632x616 maps and battle arenas 2 and 7 are disabled.'
+            Write-Host 'Previous-area comparison: the new 888x312 and 632x616 field maps are disabled.'
         }
         if ($env:SWORDCRAFT3_CUSTOM_BATTLES -eq '1') {
-            if ($env:SWORDCRAFT3_CUSTOM_ROCKY -eq '0') {
-                Write-Host 'Forest combat widescreen enabled; rocky arena disabled for this comparison.'
-            } else {
-                Write-Host 'Reviewed combat arenas 0, 2, 3 and 7 enabled, subject to the area switches above. Unverified arenas remain native.'
-            }
+            Write-Host 'Combat widescreen enabled for every battle arena.'
         } else {
             Write-Host 'Field-only test: battles use black margins.'
         }
