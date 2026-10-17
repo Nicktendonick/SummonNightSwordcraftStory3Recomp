@@ -71,8 +71,10 @@ class DebugCaptureLauncherTests(unittest.TestCase):
     def test_out_of_range_width_rejected(self):
         self.assertNotEqual(self.plan("-ViewWidth", "385").returncode, 0)
 
-    def test_batch_opens_settings_without_forcing_width(self):
-        batch = (ROOT / "Launch Debug Capture.bat").read_text()
+    def test_archived_batch_preserves_original_launch_plan(self):
+        # The legacy shortcut is reference text, not a current entry point.
+        self.assertFalse((ROOT / "Launch Debug Capture.bat").exists())
+        batch = (ROOT / "docs/history/launchers/Launch Debug Capture.bat.txt").read_text()
         self.assertIn("-ShowLauncher", batch)
         self.assertNotIn("-ViewWidth", batch)
 
