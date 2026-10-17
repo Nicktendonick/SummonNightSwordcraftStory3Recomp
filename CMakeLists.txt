@@ -116,6 +116,16 @@ endif()
 
 option(SWORDCRAFT3_RECOMP_UI "Build the recomp-ui pre-boot launcher" ON)
 if(SWORDCRAFT3_RECOMP_UI)
+    # The engine and launcher discover SDL independently. A launcher that links
+    # SDL while the engine compiled its headless stub is not a playable build.
+    get_target_property(sc3_runtime_definitions gbarecomp_runtime INTERFACE_COMPILE_DEFINITIONS)
+    if(NOT "GBARECOMP_HAVE_SDL2" IN_LIST sc3_runtime_definitions)
+        message(FATAL_ERROR
+            "The engine did not find SDL2. Set CMAKE_PREFIX_PATH to your SDL2/MinGW "
+            "development prefix (for example C:/msys64/mingw64). SDL2_DIR alone "
+            "only configures the launcher. For intentional headless work, disable "
+            "SWORDCRAFT3_RECOMP_UI.")
+    endif()
     include("${RECOMP_UI_ROOT}/recomp_ui.cmake")
     add_library(swordcraft3_launcher_ui STATIC src/game_launcher_boot.cpp)
     target_include_directories(swordcraft3_launcher_ui PRIVATE
@@ -250,7 +260,7 @@ if(BUILD_TESTING)
     target_link_libraries(swordcraft3_presentation_tests PRIVATE swordcraft3_presentation)
     target_include_directories(swordcraft3_presentation_tests PRIVATE "${RECOMP_UI_ROOT}/src")
     add_test(NAME swordcraft3_presentation_tests COMMAND swordcraft3_presentation_tests)
-    find_package(Python3 COMPONENTS Interpreter QUIET)
+    find_package(Python3 3.11 COMPONENTS Interpreter REQUIRED)
     if(Python3_Interpreter_FOUND)
         add_test(NAME swordcraft3_field_provenance_unit
             COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
@@ -260,7 +270,33 @@ if(BUILD_TESTING)
             COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
                 -p "test_audit_widescreen_route.py" -v)
+        foreach(sc3_python_test IN ITEMS arena_audit debug_capture_launcher
+                lab_shadow_codegen package_alpha portable_release_package translation106_audit)
+            add_test(NAME swordcraft3_${sc3_python_test}_unit
+                COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+                    -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+                    -p "test_${sc3_python_test}.py" -v)
+        endforeach()
     endif()
+
+    # Build the game repository's source/synthetic tests without requiring any
+    # private ROM, BIOS or generated guest corpus. Engine tests have their own
+    # targets; this aggregate and label deliberately do not claim to run them.
+    get_property(sc3_directory_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    set(sc3_test_targets)
+    foreach(sc3_target IN LISTS sc3_directory_targets)
+        if(sc3_target MATCHES "^swordcraft3_.*_tests$")
+            list(APPEND sc3_test_targets ${sc3_target})
+            if(MSVC)
+                target_compile_options(${sc3_target} PRIVATE /UNDEBUG)
+            else()
+                target_compile_options(${sc3_target} PRIVATE -UNDEBUG)
+            endif()
+        endif()
+    endforeach()
+    add_custom_target(swordcraft3_tests DEPENDS ${sc3_test_targets})
+    get_property(sc3_directory_tests DIRECTORY PROPERTY TESTS)
+    set_tests_properties(${sc3_directory_tests} PROPERTIES LABELS "swordcraft3-rom-free")
 endif()
 
 # Private fast iteration path: reuse this owner's unchanged English-beta guest

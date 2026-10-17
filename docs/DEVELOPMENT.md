@@ -12,25 +12,75 @@ The release-readiness baseline is merged PR #12, game commit
 `3a7e974759b2a79ad4144396d571da6f004ba393` and UI
 `0aae3c6cfbbf10ba5c4e37165e13a116fa3a820f`.
 
-## Build verification in progress
+## ROM-free Windows checks
 
-The October 16 clean-clone check successfully retrieved both pinned submodules.
-It configures with native Windows CMake, Ninja, MinGW-w64 GCC/G++ 14.2,
-Python 3.13, and the installed SDL2 development package. The first test build
-is in progress; a complete fresh Japanese/English playable build is **not yet
-certified** by this record. Full reproducible commands will accompany that
-verification, rather than directing developers to a private object cache.
+The October 16 clean-clone check retrieved both pinned submodules, compiled
+the game-repository test targets without private inputs or old object caches,
+and passed all **37 registered game checks** (29 C++ test programs and eight
+Python suites). The eight Python suites contain 66 individual tests. This does
+not include the engine's separately registered test suite or a playable build.
+
+The tested host used native Windows CMake 4.4.0, Ninja
+1.13.0.git.kitware.jobserver-pipe-1, MinGW-w64 GCC/G++ 14.2.0, Python 3.13.1,
+and SDL2 2.30.11. A separate SDL2-upgrade experiment is not silently substituted
+for this baseline. CMake requires 3.20+, a C++20 compiler, and Python 3.11+ for
+the source/packaging tests.
+
+Install the MinGW64 compiler and SDL2 development package, and native CMake,
+Ninja and Python. In PowerShell, from the recursively cloned repository:
+
+```powershell
+$toolchain = 'C:/msys64/mingw64' # adjust to your MinGW64 installation
+$env:PATH = "$toolchain/bin;$env:PATH"
+cmake -S . -B build-check -G Ninja `
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+  "-DCMAKE_C_COMPILER=$toolchain/bin/gcc.exe" `
+  "-DCMAKE_CXX_COMPILER=$toolchain/bin/g++.exe" `
+  "-DCMAKE_PREFIX_PATH=$toolchain" `
+  "-DGBARECOMP_MINGW_RUNTIME_BIN=$toolchain/bin" `
+  -DGBARECOMP_COMPILER_CACHE=OFF
+cmake --build build-check --target swordcraft3_tests --parallel 2
+ctest --test-dir build-check -L swordcraft3-rom-free --output-on-failure --no-tests=error
+```
+
+Each command must succeed before continuing. If tools are not on PATH, invoke
+their full paths and pass `-DCMAKE_MAKE_PROGRAM=C:/path/to/ninja.exe` and
+`-DPython3_EXECUTABLE=C:/path/to/python.exe` when configuring. CMake fetches
+pinned toml++ v3.4.0 unless the engine is given an existing include directory;
+the initial configure therefore needs network access.
+
+Use the named test target, not an unqualified build of all game executables:
+those require private generated code. A missing generated-BIOS placeholder is
+expected for these synthetic tests, not a valid substitute for the BIOS in a
+playable release. Assertions remain enabled for the C++ test programs even in
+optimized configurations.
+
+The [ROM-free CI workflow](../.github/workflows/rom-free-tests.yml) uses the same
+target and test label on a Windows runner with MinGW64 packages. Its actions
+are pinned and its token is read-only. No ROMs, BIOS, saves, private captures,
+or generated game code are required or uploaded. The workflow has been
+prepared locally; **a hosted GitHub Actions run remains to be verified after
+the changes are approved and pushed**.
 
 When configuring with MSYS2's MinGW64 dependencies, provide the native prefix,
 for example `-DCMAKE_PREFIX_PATH=C:/msys64/mingw64`, and put its `bin` directory
 on the process PATH. Specifying `SDL2_DIR` for the launcher alone is insufficient:
-the engine performs a separate lookup. Check the configure log says **SDL2 found**;
-**host_window will stub out** is not an acceptable playable configuration.
+the engine performs a separate lookup. Check the configure log says **SDL2 found**.
+With the desktop launcher enabled, configuration now fails if the engine would
+use its headless stub. This negative case was checked separately. Intentional
+headless configuration requires explicitly disabling `SWORDCRAFT3_RECOMP_UI`.
 
 Keep the compiler's runtime DLL directory on PATH while running development
 tests. A missing `libgcc_s_seh-1.dll` / `libstdc++-6.dll` is a loader failure,
 not evidence that a test ran and found a gameplay bug. Do not download individual
 DLLs from unrelated websites. Portable packaging must stage the matching DLLs.
+
+## Playable build and packaging status
+
+A complete fresh Japanese/English playable build is **not yet certified** by
+this record. The current portable recipe still selects 1.0.6f executables.
+Full verified generation/build/package commands will accompany its 1.1.0f
+promotion; do not use a private cached-object shortcut as a release procedure.
 
 ## Private inputs and artifacts
 

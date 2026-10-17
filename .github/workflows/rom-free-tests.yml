@@ -1,0 +1,48 @@
+name: ROM-free game tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-mingw:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout pinned source and dependencies
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install the MinGW64 build dependencies
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-python
+      - name: Configure without private game inputs
+        run: |
+          cmake -S . -B build-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX")" \
+            -DGBARECOMP_MINGW_RUNTIME_BIN="$(cygpath -m "$MINGW_PREFIX/bin")" \
+            -DGBARECOMP_COMPILER_CACHE=OFF \
+            -DPython3_EXECUTABLE="$(cygpath -m "$(command -v python)")"
+      - name: Build source and synthetic-fixture tests
+        run: cmake --build build-ci --target swordcraft3_tests --parallel 2
+      - name: Run game-repository checks
+        run: ctest --test-dir build-ci -L swordcraft3-rom-free --output-on-failure --no-tests=error
