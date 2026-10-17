@@ -40,9 +40,9 @@ ratios, save-state/rewind tools, and F10 diagnostic capture. These remain beta
 features; options and compatibility depend on the installed build.
 
 **Release-readiness work is in progress.** Merging source does not update an
-already-installed portable. The current packaging recipe and its player README
-still describe **1.0.6f**; they must be updated and the resulting candidate tested
-before publishing a new 1.1.0f portable. Do not relabel an old ZIP as a new build.
+already-installed portable. The packaging recipe and player README now target
+**1.1.0f**. Fresh playable-build and candidate acceptance checks must finish
+before publishing a new portable. Do not relabel an old ZIP as a new build.
 
 ## Build or contribute
 
@@ -61,8 +61,8 @@ invitation requirement; a fresh recursive clone was checked on October 16, 2026.
 - [Developer tool index](tools/README.md)
 - [Renderer design and investigation handoff](docs/HANDOFF.md) — historical
   observations must be checked against current code.
-- [Portable packaging recipe](tools/package_portable_release.py) — pending the
-  current-release promotion described above.
+- [Portable packaging recipe](tools/package_portable_release.py) — requires a
+  matching clean build record and never publishes automatically.
 - [Distribution review requirements](packaging/portable-beta/RELEASE-REVIEW.md)
 
 Game-specific code belongs here; generic engine changes belong in `gbarecomp`,

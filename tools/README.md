@@ -5,11 +5,16 @@ scripts. Start with [developer instructions](../docs/DEVELOPMENT.md).
 
 ## Build and packaging
 
+- `build_portable.ps1`: reproducible Windows Japanese + English 1.1.0f build;
+  verifies input hashes, regenerates private code, and records clean revisions
+  and output hashes. It does not reuse the old experimental object cache.
 - `generate.ps1` / `generate_bios.ps1`: private code generation for verified
   local inputs. Generated game and BIOS code must never be committed.
 - `package_portable_release.py`: allowlisted portable candidate construction,
-  dependency auditing, manifest, hashes, and archive verification. Its current
-  recipe still selects 1.0.6f; current-release promotion is pending.
+  dependency auditing, manifest, hashes, and archive verification. Its target
+  is Japanese + English 1.1.0f, selected by `packaging/portable-beta/target.json`.
+  Packaging requires the matching `portable-build.json`; use explicit
+  `--build-dir` and `--owner-root` for nested developer checkouts.
 - `package_alpha.py`: historical packager **and active shared audit helpers**.
   Other packagers import it; do not delete it based on its name.
 

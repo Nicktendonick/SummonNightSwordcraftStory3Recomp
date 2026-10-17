@@ -78,9 +78,41 @@ DLLs from unrelated websites. Portable packaging must stage the matching DLLs.
 ## Playable build and packaging status
 
 A complete fresh Japanese/English playable build is **not yet certified** by
-this record. The current portable recipe still selects 1.0.6f executables.
-Full verified generation/build/package commands will accompany its 1.1.0f
-promotion; do not use a private cached-object shortcut as a release procedure.
+this record. The following build helper and 1.1.0f packaging recipe are under
+verification; runtime acceptance and external-machine testing remain separate.
+
+From a clean committed checkout, using your own verified private inputs:
+
+```powershell
+./tools/build_portable.ps1 `
+  -JapaneseRom 'C:/private/swordcraft3_jp.gba' `
+  -EnglishRom 'C:/private/Swordcraft Story 3 English 1.1.0f.gba' `
+  -Bios 'C:/private/gba_bios.bin' `
+  -BuildDir 'build-portable' -Jobs 2
+python -B tools/package_portable_release.py --build-dir build-portable
+```
+
+Use `-CMake`, `-Ninja`, `-Python`, `-Git` and `-CompilerPrefix` if the tools are
+not on PATH or are installed elsewhere. Use a short `-BuildDir` to avoid Windows
+object/cache path limits. Nested checkouts can package into their owning project
+with `--owner-root C:/path/to/owner` and an explicit `--build-dir`. The packager
+also accepts `--git` and `--strip` tool paths. It creates a uniquely named new
+candidate and a separate extracted test copy; it never overwrites a played install.
+
+The helper builds `gba_recompile`, regenerates the private BIOS, reconfigures
+the runtime to include it, and generates Japanese and English code from their
+separate verified inputs. It records exact revisions and hashes in
+`portable-build.json`. The packager rejects changed binaries, dirty/mismatched
+source revisions, old translation metadata, and cached-guest-object builds.
+
+To verify the ZIP's allowlist and hashes later, no old build tree is needed:
+
+```powershell
+python -B tools/package_portable_release.py --verify 'C:/path/to/candidate.zip'
+```
+
+This is integrity/packaging verification, not a digital signature, permission to
+distribute derived code/artwork, or proof that every game route works.
 
 ## Private inputs and artifacts
 

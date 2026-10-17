@@ -409,8 +409,8 @@ endif()
 # available for private regression only; package_portable_release selects this
 # pair, never the old beta instruction corpus. Generate new guest code afresh.
 set(SWORDCRAFT3_RELEASE105_ROM "" CACHE FILEPATH "Private verified historical English 1.0.5.f ROM")
-set(SWORDCRAFT3_RELEASE106_ROM "" CACHE FILEPATH "Private verified English 1.0.6.f ROM (required for portable packaging)")
-set(SWORDCRAFT3_RELEASE110_ROM "" CACHE FILEPATH "Private verified English 1.1.0.f ROM (optional; packaging still targets 1.0.6.f)")
+set(SWORDCRAFT3_RELEASE106_ROM "" CACHE FILEPATH "Private verified historical English 1.0.6.f ROM")
+set(SWORDCRAFT3_RELEASE110_ROM "" CACHE FILEPATH "Private verified English 1.1.0.f ROM (required for current portable packaging)")
 foreach(sc3_release IN ITEMS 105 106 110)
 set(sc3_release_rom "${SWORDCRAFT3_RELEASE${sc3_release}_ROM}")
 if(sc3_release_rom)

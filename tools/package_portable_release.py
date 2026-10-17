@@ -18,8 +18,9 @@ import zipfile
 from package_alpha import pe_info, check_dependencies, safe_relative, file_hash
 
 ROOT = Path(__file__).resolve().parents[1]
-OWNER = ROOT.parents[1]
-BUILD = ROOT / "build-native"
+OWNER = ROOT
+BUILD = ROOT / "build-portable"
+TARGET = json.loads((ROOT / "packaging/portable-beta/target.json").read_text(encoding="utf-8"))
 STARTER = "Swordcraft Story 3 Beta.exe"
 GAME = "Swordcraft3CustomRendererBeta.exe"
 JAPANESE = "Swordcraft3Japanese.exe"
@@ -27,7 +28,7 @@ FOLDER = "Swordcraft Story 3 Portable Beta"
 DATA_DIRS = ["BIOS", "Captures", "Logs", "Mods", "ROMs", "Save States", "Saves", "Settings"]
 MANIFEST = "Runtime/package-manifest.json"
 SUMS = "Runtime/SHA256SUMS.txt"
-GIT = Path("C:/Program Files/Git/cmd/git.exe")
+GIT = "git"
 
 
 def run(args, **kwargs):
@@ -35,10 +36,53 @@ def run(args, **kwargs):
                           errors="replace", timeout=90, **kwargs).stdout.strip()
 
 
-def recipe():
+def cmake_cache():
+    result = {}
+    for line in (BUILD / "CMakeCache.txt").read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith(("#", "//")) or "=" not in line or ":" not in line.split("=", 1)[0]:
+            continue
+        key, value = line.split("=", 1)
+        result[key.split(":", 1)[0]] = value
+    return result
+
+
+def source_revisions():
+    revisions = {}
+    for name, directory in [("game", ROOT), ("engine", ROOT / "gbarecomp"), ("ui", ROOT / "recomp-ui")]:
+        if run([GIT, "-C", str(directory), "status", "--porcelain", "--untracked-files=normal"]):
+            raise ValueError("Source is dirty; commit or isolate changes before packaging: " + name)
+        revisions[name] = run([GIT, "-C", str(directory), "rev-parse", "HEAD"])
+    return revisions
+
+
+def build_record():
+    record = json.loads((BUILD / "portable-build.json").read_text(encoding="utf-8-sig"))
+    if (record.get("schema") != 1 or record.get("target") != TARGET or
+            record.get("build_type") != "Release" or record.get("generated_bios") is not True):
+        raise ValueError("Build record does not identify the current clean portable target")
+    if record.get("revisions") != source_revisions():
+        raise ValueError("Build/source revision mismatch; rerun tools/build_portable.ps1")
+    expected = {STARTER, TARGET["english_target"] + ".exe", TARGET["japanese_target"] + ".exe",
+                "SDL2.dll", "libstdc++-6.dll", "libgcc_s_seh-1.dll", "libwinpthread-1.dll"}
+    if set(record.get("artifacts", {})) != expected:
+        raise ValueError("Build record artifact list mismatch")
+    for name, digest in record["artifacts"].items():
+        if file_hash(BUILD / name) != digest:
+            raise ValueError("Build artifact checksum mismatch: " + name)
+    cache = cmake_cache()
+    if Path(cache.get("CMAKE_HOME_DIRECTORY", "")).resolve() != ROOT:
+        raise ValueError("Build cache belongs to a different source checkout")
+    if cache.get("SC3_LAB_GUEST_OBJECT_DIR") or cache.get("CMAKE_BUILD_TYPE") != "Release":
+        raise ValueError("Cached guest objects or non-release build are not a portable source")
+    if not cache.get(TARGET["cmake_rom_option"]):
+        raise ValueError("Build cache lacks the current English translation target")
+    return record
+
+
+def recipe(resolve_build=True):
     files = [(BUILD / STARTER, STARTER),
-             (BUILD / "Swordcraft3Translation106.exe", "Runtime/" + GAME),
-             (BUILD / "Swordcraft3Japanese106.exe", "Runtime/" + JAPANESE),
+             (BUILD / (TARGET["english_target"] + ".exe"), "Runtime/" + GAME),
+             (BUILD / (TARGET["japanese_target"] + ".exe"), "Runtime/" + JAPANESE),
              (ROOT / "native-test.toml", "Runtime/game.toml")]
     for name in ["SDL2.dll", "libstdc++-6.dll", "libgcc_s_seh-1.dll", "libwinpthread-1.dll"]:
         files.append((BUILD / name, "Runtime/" + name))
@@ -66,15 +110,15 @@ def recipe():
         (ROOT / "recomp-ui/assets/common/fonts/NOTICE.md", "fonts-NOTICE.md"),
         (ROOT / "assets/fonts/NotoSansJP-OFL.txt", "NotoSansJP-OFL.txt"),
     ]
-    # Resolve the actual linked toml++ source from CMake, not an older build.
-    cache = (BUILD / "CMakeCache.txt").read_text(encoding="utf-8")
-    sources = [line.split("=", 1)[1] for line in cache.splitlines()
-               if line.startswith("tomlplusplus_SOURCE_DIR:STATIC=")]
-    if len(sources) != 1:
-        raise ValueError("Cannot locate the linked toml++ license")
-    toml = Path(sources[0]).resolve()
-    if not toml.is_relative_to(OWNER):
-        raise ValueError("Unexpected external toml++ source")
+    # The destination allowlist is independent of the developer's build tree.
+    # Only constructing a package resolves the actual dependency license source.
+    toml = Path("unresolved-toml-license")
+    if resolve_build:
+        cache = cmake_cache()
+        location = cache.get("tomlplusplus_SOURCE_DIR") or cache.get("GBARECOMP_TOMLPP_INCLUDE_DIR")
+        if not location or location.endswith("-NOTFOUND"):
+            raise ValueError("Cannot locate the linked toml++ license")
+        toml = Path(location).resolve()
     notices.append((toml / "LICENSE", "tomlplusplus-LICENSE.txt"))
     for name in ["SDL2-LICENSE.txt", "libwinpthread-COPYING.txt", "gcc-libs-README.txt",
                  "gcc-libs-COPYING3.txt", "gcc-libs-COPYING.RUNTIME.txt"]:
@@ -84,7 +128,7 @@ def recipe():
 
 
 def verify_archive(archive):
-    expected = {dest for _, dest in recipe()} | {MANIFEST, SUMS}
+    expected = {dest for _, dest in recipe(resolve_build=False)} | {MANIFEST, SUMS}
     with zipfile.ZipFile(archive) as z:
         names = z.namelist()
         if len(names) != len({name.casefold() for name in names}):
@@ -98,6 +142,8 @@ def verify_archive(archive):
             if ((item.external_attr >> 16) & 0o170000) == 0o120000 or item.flag_bits & 1:
                 raise ValueError("Symlinks/encrypted entries are not allowed")
         manifest = json.loads(z.read(FOLDER + "/" + MANIFEST))
+        if manifest.get("schema") != 2 or manifest.get("target") != TARGET:
+            raise ValueError("Archive target/version does not match this portable recipe")
         rows = manifest["files"]
         if len(rows) != len(expected) - 2 or {r["path"] for r in rows} != expected - {MANIFEST, SUMS}:
             raise ValueError("Manifest payload mismatch")
@@ -115,6 +161,7 @@ def verify_archive(archive):
 
 
 def prepare(strip):
+    record = build_record()
     files = recipe()
     if len(files) != len({dest.casefold() for _, dest in files}):
         raise ValueError("Duplicate destinations")
@@ -159,19 +206,22 @@ def prepare(strip):
             binaries[target.name] = after
         if file_hash(source) != original:
             raise ValueError("Packaging source changed: " + str(source))
-        rows.append({"path": dest, "source": source.relative_to(OWNER).as_posix(),
+        if source.is_relative_to(ROOT):
+            source_label = "source/" + source.relative_to(ROOT).as_posix()
+        elif source.is_relative_to(BUILD):
+            source_label = "build/" + source.relative_to(BUILD).as_posix()
+        else:
+            source_label = "dependency/" + source.name
+        rows.append({"path": dest, "source": source_label,
                      "source_sha256": original, "sha256": file_hash(target), "bytes": target.stat().st_size})
     check_dependencies(binaries)
-    revisions = {}
-    for name, directory in [("game", ROOT), ("engine", ROOT / "gbarecomp"), ("ui", ROOT / "recomp-ui")]:
-        diff = run([str(GIT), "-C", str(directory), "diff", "HEAD", "--", "."])
-        revisions[name] = {"head": run([str(GIT), "-C", str(directory), "rev-parse", "HEAD"]),
-                           "working_diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
-                           "status": run([str(GIT), "-C", str(directory), "status", "--short"]).splitlines()}
-    manifest = {"schema": 1, "created_utc": stamp, "variant": "Japanese + optional English 1.0.6.f",
+    if source_revisions() != record["revisions"]:
+        raise ValueError("Source changed during packaging")
+    manifest = {"schema": 2, "created_utc": stamp, "variant": "Japanese + optional English " + TARGET["english_revision"],
+                "target": TARGET, "build": record,
                 "publication_ready": False, "review": "Runtime/notices/RELEASE-REVIEW.md",
-                "description": "Dual-engine portable UI test; organized launcher/Esc Graphics; English Translation in Mods; released English 1.0.6.f; optional battle framing; isolated revision saves",
-                "revisions": revisions, "files": rows}
+                "description": "Dual-engine portable candidate; optional English translation and Guard; organized launcher/Esc Graphics; all-arena Repeat scenery; isolated revision saves",
+                "revisions": record["revisions"], "files": rows}
     (payload / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     allowed = {dest for _, dest in files} | {MANIFEST, SUMS}
     (payload / SUMS).write_text("".join(f"{file_hash(payload / name)}  {name}\n"
@@ -192,7 +242,7 @@ def prepare(strip):
     # Test exactly these bytes in a separate disposable tree, never in payload.
     # A deep timestamped test path plus the verified patch-cache filename can
     # exceed the Windows C file API limit. Relocatability includes short paths.
-    extracted = ROOT / "validation" / ("pkg-" + stamp[-8:])
+    extracted = OWNER / "validation" / ("pkg-" + stamp[-8:])
     extracted.mkdir(parents=True, exist_ok=False)
     with zipfile.ZipFile(archive) as z:
         z.extractall(extracted)  # exact validated paths and entry list above
@@ -208,17 +258,23 @@ def prepare(strip):
 
 
 def main():
+    global OWNER, BUILD, GIT
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--strip", type=Path, default=Path("C:/msys64/mingw64/bin/strip.exe"))
+    parser.add_argument("--build-dir", type=Path, default=BUILD)
+    parser.add_argument("--owner-root", type=Path, default=ROOT,
+                        help="Project owning candidate/output folders; defaults to this checkout")
+    parser.add_argument("--git", default="git", help="Git executable, not a machine-specific hardcoded path")
     parser.add_argument("--verify", type=Path)
     args = parser.parse_args()
+    OWNER, BUILD, GIT = args.owner_root.resolve(), args.build_dir.resolve(), args.git
     try:
         if args.verify:
             verify_archive(args.verify)
             print("PASS: exact file allowlist, empty data directories, manifest and checksums")
         else:
             prepare(args.strip.resolve())
-    except (ValueError, OSError, subprocess.SubprocessError, zipfile.BadZipFile) as exc:
+    except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError, zipfile.BadZipFile) as exc:
         print("Packaging stopped: " + str(exc), file=sys.stderr)
         return 1
     return 0

@@ -10,7 +10,8 @@ This candidate is for local review. Before public upload:
    Excluding separate ROM/BIOS files does not settle that question.
 2. Confirm distribution rights/provenance for the supplied artwork, logo and icon.
 3. Finish applicable dependency/font notices and source-availability arrangements.
-   Engine/UI forks are currently private; do not assume all obligations are met.
+   Engine/UI forks are publicly accessible, but that alone does not establish
+   that all applicable obligations or asset permissions are met.
 4. Test on a separate clean machine, including patching, controllers, audio and
    dynamic-code routes. Developer-PC tests with reduced PATH are not equivalent.
 
