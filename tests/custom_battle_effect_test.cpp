@@ -17,6 +17,12 @@ int main() {
             check(battle_arena_layout(d,0x470b,0x450b)==arena);
             check(!battle_arena_layout(d,1,0x450b));
             check(!battle_arena_layout(d,0x470b,0x450a));
+            // The backdrop comes from the arena descriptor: arena 10's is BG1
+            // priority 1 (4509); arena 15 has none, so BG1 must stay off.
+            const bool base=(d&7)<=1 && !(d&0x80) && (d&0x100);
+            check(battle_arena_layout(d,0x470b,0x4509,{true,0x4509})==(base && (d&0x200)));
+            check(!battle_arena_layout(d,0x470b,0x450b,{true,0x4509}));
+            check(battle_arena_layout(d,0x470b,0x0605,{false,0})==(base && !(d&0x200)));
         }
         for(unsigned c=0;c<65536;++c) {
             const bool regular=c==0x0305 || c==0x4385;

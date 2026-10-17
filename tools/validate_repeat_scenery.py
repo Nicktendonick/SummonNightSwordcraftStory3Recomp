@@ -1,7 +1,7 @@
 """PRIVATE Repeat-scenery check: guest state and owned-raster counters, no pixels.
 
 Replays one input route from a COPY of a supplied English battle save state
-(forest, arena 0) in isolated folders, once per framing case. Every guest-state
+(any supported arena) in isolated folders, once per framing case. Every guest-state
 hash must match Current: Repeat scenery is presentation only. Only Repeat may
 serve continued scenery samples, never frame decoration, and its tile-map plans
 must be built once per arena rather than every frame. Edge columns a plan
@@ -158,7 +158,7 @@ def run_case(out, args, state, name, width, mode):
     return rows, (out / name / 'stderr.log').read_text(errors='replace')
 
 
-def check_case(name, width, mode, rows, log):
+def check_case(name, width, mode, rows, log, partial=False):
     frames = {t['completed']: t for t in traces(log, 'battle-repeat-frame')}
     composition = {t['completed']: t for t in traces(log, 'composition')}
     built = plans(log)
@@ -186,13 +186,21 @@ def check_case(name, width, mode, rows, log):
     arena = arenas.pop()
     near = [p for p in built if p['layer'] == 'near']
     far = [p for p in built if p['layer'] == 'far']
-    # One plan per layer for one arena: entries are stable, so no re-planning.
-    assert len(near) == 1 and len(far) == 1, built
+    # One plan per layer per battle (arena 15 has no backdrop layer).
+    backdrop = arena != 15
+    assert len(near) == 1 and len(far) == int(backdrop), built
     for p in near + far:
-        assert p['valid'] == '1' and int(p['arena']) == arena and p['columns'] == '48'
-    assert near[0]['rows'] == '20' and far[0]['rows'] == ('32' if arena == 0 else '20')
-    last = max(frames.values(), key=lambda t: t['completed'])
-    assert last['plans'] == 2, last
+        assert p['valid'] == '1' and int(p['arena']) == arena
+    # Declared map sizes: near 384x160; backdrops 384x160, forest 384x256,
+    # arena 14 512x256.
+    assert near[0]['columns'] == '48' and near[0]['rows'] == '20'
+    if backdrop:
+        assert far[0]['columns'] == ('64' if arena == 14 else '48')
+        assert far[0]['rows'] == ('32' if arena in (0, 14) else '20')
+    # A route may outlive the battle (a near-won save ends in its result
+    # screen): read the plan state of the last frame the battle still owned.
+    last = max((frames[c['completed']] for c in owned), key=lambda t: t['completed'])
+    assert last['plans'] == 1 + int(backdrop), last
     # Insets: only the near layer's flat rows (above the ROM threshold d), at
     # most the columns no ordinary Hflat shows; never worse than the edge.
     threshold = last['threshold']
@@ -200,11 +208,21 @@ def check_case(name, width, mode, rows, log):
              for c in range(129)]
     caps = (max(0, min(hflat)) // 8, max(0, 384 - 240 - max(hflat)) // 8)
     n = near[0]
-    assert int(n['inset_rows']) == threshold // 8, (n, threshold)
+    # The padded band may end up to two rows early where the flat band's last
+    # rows are already floor art across the full width (arena 5).
+    assert threshold // 8 - 2 <= int(n['inset_rows']) <= threshold // 8 or \
+        (threshold // 8 < 2 and int(n['inset_rows']) == 0), (n, threshold)
     assert int(n['left_inset']) <= caps[0] and int(n['right_inset']) <= caps[1], (n, caps)
     assert int(n['left_cost']) <= int(n['left_edge_cost']), n
     assert int(n['right_cost']) <= int(n['right_edge_cost']), n
-    assert far[0]['inset_rows'] == '0' and far[0]['left_inset'] == '0' and far[0]['right_inset'] == '0'
+    if backdrop:
+        # Backdrop insets stay within its overscan (columns beyond its scroll
+        # range): the planner replaces all of it; a reviewed special case
+        # may keep authored overscan columns (arena 13's orbs), never more.
+        f = far[0]
+        assert int(f['left_inset']) <= int(f['left_padding']) and \
+            int(f['right_inset']) <= int(f['right_padding']), f
+        assert f['inset_rows'] in ('0', f['rows']), f
     if arena == 0:
         # Forest: the tree-base rows 12-15 had no authored left continuation.
         assert threshold == 128 and caps == (4, 4), (threshold, caps)
@@ -216,24 +234,33 @@ def check_case(name, width, mode, rows, log):
             assert f['inset_h_min'] >= f['left_inset'] * 8, f
             assert f['inset_h_max'] + 240 <= 384 - f['right_inset'] * 8, f
     shown = [f for f in owned_frames if f['inset_lines']]
-    assert shown, 'no captured scenery line used an inset row'
+    # Arenas 11/12 declare threshold 0: no flat band, so no inset rows.
+    assert shown or not int(n['inset_rows']), 'no captured scenery line used an inset row'
     inset_samples = [f['inset_samples'] for f in owned_frames]
-    if int(n['left_inset']) or int(n['right_inset']):
-        assert max(inset_samples) > 0, 'planned insets never served'
+    # Replaced columns are served only where this width's margins reach them
+    # (arena 16's flat band never scrolls left of 56: a 284 margin of 22
+    # columns never reaches its four replaced columns).
+    margin = (width - 240) // 2
+    reachable = shown and (
+        (int(n['left_inset']) and min(f['inset_h_min'] for f in shown) - margin < int(n['left_inset']) * 8) or
+        (int(n['right_inset']) and max(f['inset_h_max'] for f in shown) + 240 + margin >
+         384 - int(n['right_inset']) * 8))
+    if reachable:
+        assert partial or max(inset_samples) > 0, 'planned insets never served'
     # Continued samples are served at both guest camera limits. Which rows
     # need them is decided by the captured scroll schedule, not by pixels.
     by_frame = {}
     for t in frames.values():
         by_frame[t['completed']] = t
     samples = [t['near_samples'] for t in frames.values() if t['active']]
-    result.update(near_plan=near[0], far_plan=far[0], max_near_samples=max(samples),
+    result.update(near_plan=near[0], far_plan=far[0] if far else None, max_near_samples=max(samples),
                   frames_with_near_samples=sum(1 for s in samples if s),
                   frames_with_far_samples=sum(1 for t in frames.values() if t['far_samples']),
                   threshold=threshold, inset_caps=caps, max_inset_samples=max(inset_samples),
                   frames_with_inset_samples=sum(1 for s in inset_samples if s),
                   inset_h_range=[min(f['inset_h_min'] for f in shown),
-                                 max(f['inset_h_max'] for f in shown)])
-    assert max(samples) > 0, 'no continued near-scenery samples'
+                                 max(f['inset_h_max'] for f in shown)] if shown else None)
+    assert partial or max(samples) > 0, 'no continued near-scenery samples'
     return result
 
 
@@ -244,9 +271,13 @@ def main():
         default=ROOT / 'build-native/translation-1.0.6f/Swordcraft Story 3 English 1.0.6f.gba')
     parser.add_argument('--bios', type=Path, default=ROOT / 'roms/gba_bios.bin')
     parser.add_argument('--state', type=Path, required=True,
-        help='forest (arena 0) battle save state for the same ROM; only a copy is loaded')
+        help='battle save state (any supported arena) for the same ROM; only a copy is loaded')
     parser.add_argument('--portable', type=Path,
         help='optional portable folder that must stay byte-identical')
+    # A save whose route cannot reach both camera limits (an opponent blocks
+    # the walk, or the battle ends) still checks every guest-state equality;
+    # only the coverage checks are skipped and reported.
+    parser.add_argument('--partial-route', action='store_true')
     args = parser.parse_args()
     out = ROOT / 'validation' / ('repeat-scenery-' + str(time.time_ns()))
     out.mkdir(parents=True)
@@ -264,7 +295,7 @@ def main():
         for name, width, mode in CASES:
             rows, log = run_case(out, args, state, name, width, mode)
             runs[name] = rows
-            report['cases'][name] = check_case(name, width, mode, rows, log)
+            report['cases'][name] = check_case(name, width, mode, rows, log, args.partial_route)
             cameras = report['cases'][name]['cameras']
             print(name, 'ok', 'cameras %d..%d' % (min(cameras), max(cameras)), flush=True)
         # Presentation only: identical guest memory/cycle hashes and gameplay
@@ -277,7 +308,10 @@ def main():
                             'camera', 'camera_mode', 'x', 'y', 'hashes'):
                     assert a[key] == b[key], (name, key, a['label'], a[key], b[key])
             cameras = {r['camera'] for r in rows}
-            assert 0 in cameras and 128 in cameras, ('both camera limits not reached', name)
+            report['cases'][name]['both_camera_limits'] = 0 in cameras and 128 in cameras
+            assert args.partial_route or report['cases'][name]['both_camera_limits'], \
+                ('both camera limits not reached', name)
+        report['partial_route'] = args.partial_route
         report['guest_state_matches_current'] = True
         report['passed'] = True
     finally:

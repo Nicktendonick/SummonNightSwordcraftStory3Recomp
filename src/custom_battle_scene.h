@@ -11,6 +11,7 @@
 #include "battle_follow_camera.h"
 #include "battle_scenery_edges.h"
 #include "battle_scenery_repeat.h"
+#include "battle_scenery_special.h"
 #include "runtime.h"
 #include <cstdio>
 #include <cstring>
@@ -50,9 +51,14 @@ class CustomBattleScene {
     std::array<BattleSpellWindow,160> spell_windows_{};
     mutable std::array<unsigned,160> effect_left_samples_{},effect_right_samples_{};
     static unsigned u16(const std::uint8_t* p) { return gba::text_u16(p); }
-    static bool layout(unsigned display,unsigned bg0,unsigned bg1,unsigned bg2) {
+    BattleBackdropLayout backdrop_{}; // from the ROM arena descriptor
+    // Backdrop columns its scroll can never show (0 when unknown).
+    unsigned far_overscan_left_=0,far_overscan_right_=0;
+    std::array<std::uint8_t,0x200> target_palette_{}; // BG half of the palette module's target
+    bool target_palette_valid_=false;
+    bool layout(unsigned display,unsigned bg0,unsigned bg1,unsigned bg2) const {
         (void)bg2;
-        return battle_arena_layout(display,bg0,bg1);
+        return battle_arena_layout(display,bg0,bg1,backdrop_);
     }
     static bool columns_equal(const std::uint8_t* vram,unsigned cnt,unsigned a,unsigned b) {
         const unsigned rows=(cnt&0x8000)?64:32;
@@ -78,19 +84,23 @@ class CustomBattleScene {
         }
         return width;
     }
-    static void trace_plan(const char* layer,unsigned arena,std::uint32_t key,const SceneryRepeatPlan& plan) {
+    static void trace_plan(const char* layer,unsigned arena,std::uint32_t key,std::uint32_t map,
+                           const SceneryRepeatPlan& plan,bool target_palette) {
         char sides[2][SceneryRepeatSide::max_rows*5+1]{};
         for(unsigned s=0;s<2;++s) {
             const auto& side=s?plan.right:plan.left;
             unsigned used=0;
             for(unsigned y=0;y<plan.rows;++y)
                 used+=unsigned(std::snprintf(sides[s]+used,sizeof(sides[s])-used,"%s%c%u",y?",":"",
-                    side.rows[y].mirror?'m':'w',unsigned(side.rows[y].span)));
+                    side.rows[y].quilt?'q':side.rows[y].sequence?'s':side.rows[y].mirror?'m':'w',
+                    unsigned(side.rows[y].quilt?side.quilt.source:side.rows[y].span)));
         }
-        std::fprintf(stderr,"[sc3:battle-repeat] layer=%s arena=%u valid=%u columns=%u rows=%u reach=%u key=%08x right_cost=%u right_unauthored=%u left_cost=%u left_unauthored=%u inset_rows=%u right_inset=%u left_inset=%u right_edge_cost=%u right_edge_unauthored=%u left_edge_cost=%u left_edge_unauthored=%u right=%s left=%s\n",
-            layer,arena,unsigned(plan.valid),plan.columns,plan.rows,plan.reach,unsigned(key),
+        std::fprintf(stderr,"[sc3:battle-repeat] layer=%s arena=%u valid=%u palette=%s columns=%u rows=%u band=%u reach=%u key=%08x map=%08x right_cost=%u right_unauthored=%u left_cost=%u left_unauthored=%u inset_rows=%u right_inset=%u left_inset=%u right_padding=%u left_padding=%u right_edge_cost=%u right_edge_unauthored=%u left_edge_cost=%u left_edge_unauthored=%u right=%s left=%s\n",
+            layer,arena,unsigned(plan.valid),target_palette?"target":"live",plan.columns,plan.rows,plan.band,plan.reach,
+            unsigned(key),unsigned(map),
             plan.right.cost,plan.right.unauthored,plan.left.cost,plan.left.unauthored,
-            plan.inset_rows,plan.right.inset,plan.left.inset,plan.right_edge.cost,plan.right_edge.unauthored,
+            plan.inset_rows,plan.right.inset,plan.left.inset,plan.right.padding,plan.left.padding,
+            plan.right_edge.cost,plan.right_edge.unauthored,
             plan.left_edge.cost,plan.left_edge.unauthored,sides[1],sides[0]);
     }
     // Edge columns of the near map's flat rows that no ordinary camera shows
@@ -104,26 +114,52 @@ class CustomBattleScene {
         return {std::min(band.rows,20u),unsigned(std::max(0,band.h_min))/8,
                 right>0?unsigned(right)/8:0u};
     }
-    // Plans depend only on the authored map ENTRIES in VRAM (no tile pixels)
-    // and the ROM arena threshold. They are rebuilt only when those change,
-    // i.e. once per arena.
-    bool update_repeat_plans(const std::uint8_t* vram) {
+    // Plans come from the authored map ENTRIES in VRAM and the ROM arena
+    // threshold; joins the artist never placed are scored on how well the
+    // touching tile edges match (the layer's tile graphics and BG palette,
+    // read only to choose continuations, never to assert or detect scenes).
+    // Floors repeat with one period per side in every arena; arenas 6, 7, 13
+    // and 14 then take their reviewed band sequences (battle_scenery_special).
+    // Each layer is planned once per battle. Arenas with a tile-animation
+    // asset (08031420, descriptor byte 2; arena 2's near map) rewrite map
+    // entries every few frames: re-planning on each change cost ~10 ms a
+    // time and could switch rules between frames. The animated cells still
+    // show live through the fixed column rules.
+    bool update_repeat_plans(const std::uint8_t* vram,const std::uint8_t* pal) {
         const unsigned columns=near_source_width()/8,far_rows=battle_far_source_rows(state_.arena);
-        if(!vram || columns!=48 || !far_rows) return false;
+        if(!vram || !pal || columns!=48 || (backdrop_.enabled && !far_rows)) return false;
         std::array<std::uint16_t,SceneryRepeatPlan::max_columns*SceneryRepeatSide::max_rows> entries{};
-        auto refresh=[&](const char* name,unsigned cnt,unsigned rows,SceneryRepeatInsets insets,
-                         SceneryRepeatPlan& plan,std::uint32_t& key) {
+        // Near: rows above the ROM threshold d are scenery, the rest is the
+        // perspective floor. Far: the whole backdrop repeats as one band.
+        auto refresh=[&](const char* name,unsigned cnt,unsigned columns,unsigned rows,SceneryRepeatInsets insets,
+                         unsigned floor_row,SceneryRepeatPlan& plan,std::uint32_t& key) {
+            const std::uint32_t identity=(state_.arena<<24)^(rows<<16)^
+                (insets.rows<<10)^(insets.left<<5)^insets.right;
+            if(plan.valid && identity==key) return true;
             for(unsigned y=0;y<rows;++y) for(unsigned x=0;x<columns;++x)
                 if(!gba::text_ring_entry(cnt,x*8,y*8,vram,0x18000,entries[y*columns+x])) return false;
-            const std::uint32_t hash=scenery_repeat_hash(entries.data(),columns*rows)^(rows<<24)^
-                (insets.rows<<16)^(insets.left<<8)^insets.right;
-            if(plan.valid && hash==key) return true;
-            plan=plan_scenery_repeat(entries.data(),columns,rows,10,insets); key=hash; ++plans_built_;
-            trace_plan(name,state_.arena,key,plan);
+            const std::size_t chars=std::size_t((cnt>>2)&3u)*0x4000; // BG tiles end at 0x10000
+            SceneryTileArt art; art.chars=vram+chars; art.size=0x10000-chars; art.palette=pal;
+            plan=plan_scenery_repeat(entries.data(),columns,rows,10,insets,floor_row,art,true);
+            const auto special=battle_scenery_special(state_.arena,std::strcmp(name,"far")==0);
+            if(special.left.length) scenery_repeat_apply_sequence(plan,false,special.left);
+            if(special.right.length) scenery_repeat_apply_sequence(plan,true,special.right);
+            for(int s=0;s<2;++s) {
+                const auto& q=s ? special.quilt_right : special.quilt_left;
+                if(q.enabled) scenery_repeat_apply_quilt(plan,s==1,entries.data(),art,q.run_first,q.run_last,q.overlap);
+            }
+            key=identity; ++plans_built_;
+            trace_plan(name,state_.arena,key,scenery_repeat_hash(entries.data(),columns*rows),plan,target_palette_valid_);
             return plan.valid;
         };
-        return refresh("near",0x470b,20,near_insets(columns),near_plan_,near_key_) &&
-               refresh("far",0x450b,far_rows,{},far_plan_,far_key_);
+        const auto insets=near_insets(columns);
+        if(!refresh("near",0x470b,columns,20,insets,insets.rows,near_plan_,near_key_)) return false;
+        if(!backdrop_.enabled) { far_plan_.valid=false; return true; } // arena 15: no backdrop
+        // Backdrop columns beyond its scroll range are padding (arena 16's
+        // backdrop never scrolls; 11/12 never show their last two columns).
+        const SceneryRepeatInsets far{far_rows,far_overscan_left_,far_overscan_right_,true};
+        return refresh("far",backdrop_.cnt,battle_far_source_width(state_.arena)/8,far_rows,far,far_rows,
+                       far_plan_,far_key_);
     }
     // Replaced near columns must stay outside the native view on every
     // captured scenery row that uses them; otherwise that side uses its
@@ -171,9 +207,9 @@ class CustomBattleScene {
             // through its planned authored period or reflection, from its
             // edge or from a planned inset that only margins ever show.
             if(scene.repeat_active_) {
-                const unsigned row=((c->screen_y+(u16(c->io+0x12)&511))&255u)>>3;
+                const unsigned line=(c->screen_y+(u16(c->io+0x12)&511))&255u,row=line>>3;
                 const int mapped=scenery_repeat_x(scene.near_plan_,row,source,
-                    scene.near_left_inset_,scene.near_right_inset_);
+                    scene.near_left_inset_,scene.near_right_inset_,int(line));
                 if(mapped<0 || mapped>=near_width) return -1;
                 if(mapped!=source) {
                     ++scene.repeat_near_samples_;
@@ -185,16 +221,19 @@ class CustomBattleScene {
             return -1;
         }
         if(c->layer==1) {
-            if(scene.repeat_active_) {
+            if(scene.repeat_active_ && scene.far_plan_.valid) {
                 const int camera=hofs>=384 ? int(hofs)-512 : int(hofs);
                 const int source=x+camera,width=int(scene.far_plan_.columns)*8;
-                const unsigned row=((c->screen_y+(u16(c->io+0x16)&511))&255u)>>3;
-                if(source>=0 && source<width) { *out=x; return 1; }
-                // Rows past the reviewed far-map height keep the old loop.
+                const unsigned line=(c->screen_y+(u16(c->io+0x16)&511))&255u,row=line>>3;
+                // Every margin column goes through the plan: it also replaces
+                // overscan columns the backdrop's scroll never shows.
                 if(row<scene.far_plan_.rows) {
-                    ++scene.repeat_far_samples_;
-                    *out=scenery_repeat_x(scene.far_plan_,row,source)-camera; return 1;
+                    const int mapped=scenery_repeat_x(scene.far_plan_,row,source,true,true,int(line));
+                    if(mapped!=source) ++scene.repeat_far_samples_;
+                    *out=mapped-camera; return 1;
                 }
+                // Rows past the reviewed far-map height keep the old loop.
+                if(source>=0 && source<width) { *out=x; return 1; }
             }
             if(!scene.backdrop_period_) return -1;
             *out=battle_backdrop_x(x,hofs,scene.backdrop_period_); return 1;
@@ -315,10 +354,15 @@ public:
         const char* trace=std::getenv("SWORDCRAFT3_BATTLE_WINDOW_TRACE");
         window_trace_=trace && !std::strcmp(trace,"1");
         state_=state;
-        arena_width_=0; arena_threshold_=0;
+        arena_width_=0; arena_threshold_=0; backdrop_={}; far_overscan_left_=far_overscan_right_=0;
+        target_palette_valid_=false;
         const char* enabled=std::getenv("SWORDCRAFT3_CUSTOM_BATTLES");
         if(!enabled || std::strcmp(enabled,"1")) { decline_="disabled"; return; }
-        if(!owned) { decline_="no-battle-owner"; return; }
+        if(!owned) {
+            // Battle over: the next battle plans its maps afresh.
+            near_plan_.valid=far_plan_.valid=false;
+            decline_="no-battle-owner"; return;
+        }
         if(!battle_state_supported(state)) { decline_="unsupported-battle-state"; return; }
         const char* additional=std::getenv("SWORDCRAFT3_CUSTOM_ADDITIONAL_AREAS");
         if(battle_uses_authored_384(state.arena) && additional && !std::strcmp(additional,"0")) {
@@ -331,8 +375,37 @@ public:
         }
         active_=true; decline_="none";
         if(m.rom && m.rom_size>=0xb80418) {
-            arena_width_=u16(m.rom+0xb801cc+state.arena*28+4);
-            arena_threshold_=m.rom[0xb801cc+state.arena*28+3];
+            const std::uint8_t* d=m.rom+0xb801cc+state.arena*28;
+            arena_width_=u16(d+4);
+            arena_threshold_=d[3];
+            backdrop_.enabled=d[0x11]!=0xff;
+            backdrop_.cnt=(0x450bu&~3u)|(d[0x12]&3u);
+            // 08031810's BG1 modes (descriptor byte 0x13): 1 and 9 scroll by
+            // byte 0x14 * camera / 128, 2 by 1.5 * camera, 0, 5-8 and >9 stay
+            // at byte 0x14. Mode 3 auto-scrolls through the whole map and 4
+            // follows the perspective formula: no overscan is claimed there.
+            const unsigned mode=d[0x13],k=u16(d+0x14),camera=arena_width_>256 ? arena_width_-256 : 0;
+            bool known=true; unsigned h_min=0,h_max=0;
+            if(mode==1 || mode==9) h_max=(k*camera)>>7;
+            else if(mode==2) h_max=camera*3/2;
+            else if(mode==0 || (mode>=5 && mode<=8) || mode>9) h_min=h_max=k;
+            else known=false;
+            far_overscan_left_=far_overscan_right_=0;
+            const unsigned far_columns=battle_far_source_width(state.arena)/8,seen=(h_max+240+7)/8;
+            if(known && backdrop_.enabled && seen<far_columns) {
+                far_overscan_left_=std::min(h_min/8,SceneryRepeatPlan::max_inset);
+                far_overscan_right_=std::min(far_columns-seen,SceneryRepeatPlan::max_inset);
+            }
+            // The palette module (base 03005960, JP and 1.1.0f alike) keeps
+            // the tinted target palette there; 08010CD4 copies it to +0x400,
+            // applies the fade (080119D0) and only that copy reaches palette
+            // RAM. Battles fade in from black over ~30 frames and plans are
+            // built on the first owned frame, so score tile edges with the
+            // target colours. Verified by the routine's own literal.
+            const std::uint8_t* lit=m.rom+0x10d08;
+            target_palette_valid_=m.iwram && m.iwram_size>=0x5960+0x200 &&
+                (unsigned(lit[0])|(unsigned(lit[1])<<8)|(unsigned(lit[2])<<16)|(unsigned(lit[3])<<24))==0x03005960u;
+            if(target_palette_valid_) std::memcpy(target_palette_.data(),m.iwram+0x5960,target_palette_.size());
         }
     }
     bool draw(const gba::GbaRasterCapture& raster,const std::uint8_t* native,
@@ -368,15 +441,18 @@ public:
                 decline_="incomplete-hud-schedule"; return false;
             }
         }
-        // Arenas 2/7: sub_08031420 loads assets 34/39 with 384x160 headers.
-        // Retain each row's own scroll; repeat that authored strip only.
-        backdrop_period_=battle_uses_authored_384(state_.arena) ? 384 : period(first.vram.data(),0x450b,span(first.vram.data(),0x450b));
+        // Authored arenas: sub_08031420 loads backdrops with declared widths
+        // (384; arena 14: 512). Retain each row's own scroll; repeat that
+        // authored strip only.
+        backdrop_period_=battle_uses_authored_384(state_.arena) ? battle_far_source_width(state_.arena) :
+            period(first.vram.data(),0x450b,span(first.vram.data(),0x450b));
         const auto& gameplay=*raster.line(60);
         effect_span_=(gameplay.dispcnt&7)==0 ? span(gameplay.vram.data(),u16(gameplay.io.data()+12)) : 0;
         // Repeat scenery keeps Current's centered anchor and full width; only
         // the margin source columns change. Exact-ROM arenas only.
         if(camera_mode_==3 && authored_near_maps_)
-            repeat_active_=update_repeat_plans(gameplay.vram.data());
+            repeat_active_=update_repeat_plans(gameplay.vram.data(),
+                target_palette_valid_ ? target_palette_.data() : gameplay.pal.data());
         if(repeat_active_) check_repeat_insets(raster);
         const auto policy=view_policy();
         const char* full=std::getenv("SWORDCRAFT3_FULL_COMBAT_RENDERER");
@@ -399,7 +475,11 @@ public:
                         h_flat=h; ++flat_rows;
                     }
                 }
+                // The follow envelope is derived for thresholds 128/136 only;
+                // other arenas (1, 11-16) keep Current framing throughout
+                // instead of engaging on a few aliased Hflat values.
                 const bool ordinary=near_rows && arena_width_==384 &&
+                    (arena_threshold_==128 || arena_threshold_==136) &&
                     state_.camera_mode==0 && state_.camera>=0 && state_.camera<=128;
                 follow_=battle_follow_framing(width,h_min,h_max,
                     ordinary && flat_rows && coherent_flat ? h_flat : -1);
