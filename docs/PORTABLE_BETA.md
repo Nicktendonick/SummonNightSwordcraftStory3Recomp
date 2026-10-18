@@ -45,7 +45,11 @@ is rejected. With the original ROM selected, disabling the patch selects Japanes
 For an already-translated ROM, use Change ROM to select the original instead.
 Home shows the effective language and save bank. Japanese uses Saves/japanese.eep
 and Save States/japanese.state1 through .state10. English uses
-Saves/english-1.1.0f.eep and Save States/english-1.1.0f.state1 through .state10.
+Saves/english-1.1.0f.eep and Save States/english-1.1.state1 through .state10.
+The runtime replaces the final dotted suffix when forming a slot filename;
+do not rename existing states to the longer language basename. Back up the
+whole Save States folder before changing translation revisions, and do not
+infer state compatibility from the shortened filename.
 Older versioned saves and the retired beta's battery.eep/beta.state files are
 not automatically migrated. Keep them backed up. Select the desired
 language before Import/Clear. No automatic save conversion or cross-language

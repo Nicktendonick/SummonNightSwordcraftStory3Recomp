@@ -59,7 +59,9 @@ Home shows the selected game language; expand **Game files** for full paths and
 BIOS options. Japanese uses
 `Saves/japanese.eep` and `Save States/japanese.state1` through `.state10`.
 Released English uses `Saves/english-1.1.0f.eep` and
-`Save States/english-1.1.0f.state1` through `.state10`.
+`Save States/english-1.1.state1` through `.state10` (the current runtime's shorter
+slot filename). Keep the entire Save States folder backed up when changing
+translation revisions; a filename alone does not establish compatibility.
 Earlier released-English saves remain under their versioned names; save states
 are bound to their exact ROM and are not automatically converted on upgrade.
 Old beta `battery.eep` and `beta.state*` files are preserved, not automatically
