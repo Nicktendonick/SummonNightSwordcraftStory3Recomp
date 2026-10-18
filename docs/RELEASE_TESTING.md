@@ -197,11 +197,33 @@ frame-rate improvement. Counters end at the last periodic probe, not process
 shutdown. All original inputs and packaged files remained unchanged. Private
 evidence: `audio-backlog-ab-cb841281/report.json` in the readiness directory.
 
+### Normal presented-game save/load follow-up
+
+Three sequential cb841281 sessions used real Direct3D11/WASAPI presentation
+and the normal runtime save/load actions: 600 frames from the headless fixture,
+600 from the first session's newly saved state, and 900 with an in-session
+save and reload. All six newly saved states had zero pending native playback
+samples; no diagnostic edits were made to these states.
+
+The original fixture again produced an initial overflow (5,973 source frames,
+unchanged through its last probe). Starting from the normally saved state and
+the in-session reload both had zero sampled overflow, underruns and concealed
+stalls. This supports leaving audio behavior unchanged for this readiness
+pass: the reproduced startup overflow belongs to the headless fixture's
+restored backlog, not a demonstrated filter or ordinary save/load bottleneck.
+It does not rule out problems in other scenes, long sessions or older states.
+
+Original inputs, generated snapshots and package hashes remained unchanged.
+These save/load diagnostics are not timing benchmarks and include no listening
+test. The last probes covered 600, 480 and 840 pushes respectively, not each
+process's unsampled shutdown tail. Evidence:
+`audio-presented-state-cb841281/report.json` in the readiness directory.
+
 ## Open release gates
 
-- Decide/test playback-queue handling on state loads and additional scenarios
-  where justified; investigate demonstrated bottlenecks, not guesses. The
-  17-fixture exit route is not every story/boss transition.
+- Check additional audio/state scenarios where justified; investigate
+  demonstrated bottlenecks, not guesses. The normal save/load follow-up above
+  does not certify long-session audio or every story/boss transition.
 - Extend keyboard navigation coverage and verify physical controller reconnect,
   including disconnect while holding an input. Scripted launcher regressions
   now pass; merely detecting a physical controller is not proof.
@@ -214,7 +236,9 @@ evidence: `audio-backlog-ab-cb841281/report.json` in the readiness directory.
 - Refresh final candidate for the approved source revision, rerun its input
   acceptance, and run hosted ROM-free CI after approved push.
 - Resolve distribution/provenance review and obtain explicit approval before
-  publishing, pushing/merging changes, or contacting external testers.
+  publishing, merging changes, or contacting external testers. The owner
+  authorized pushing the readiness and UI dependency branches and opening
+  review PRs; that authorization does not include merging or publication.
 
 For external testing, record the exact ZIP hash, test machine and each outcome
 as pass/fail/not tested, with reproduction steps. Keep the old installation and
