@@ -64,11 +64,75 @@ events. This does not prove a physical-key defect. A separate UI branch fixes
 the test helper; keyboard acceptance must be rerun on a rebuilt candidate.
 Do not treat that partial report as an entirely passing run.
 
+## Follow-up candidate and input fixes
+
+Candidate `20261018T010446Z-7c70907b` uses game `e479a1b`, unchanged engine
+`3a7e974`, and UI `82fd0d4`. ZIP SHA-256:
+`05335cde24aa497286af37882ec36f73bbe5864b70bfdba7b77b97834073ab75`.
+The language/settings checks passed again, but the keyboard route exposed a
+second defect: Backspace focused Play without enabling ImGui navigation cursor
+visibility, which gates Return activation. This candidate is diagnostic, not
+publication-ready. Later fixes are not present in this archive.
+
+The isolated UI source now restores visible navigation on the existing Play
+focus shortcuts, without activating Play, and places the focus request after
+the optional Netplay item. A second reproduced fix passes controller lifecycle
+events through binding capture so ImGui refreshes its cached controller. Key,
+button and axis binding input remains consumed.
+
+Two standalone ROM-free UI CTests passed: scripted-key/frame navigation and
+virtual-controller capture hotplug. Six hidden full-launcher integration cases
+also passed normal/keyboard/pad capture with attach/reconnect, using the actual
+patched event loop and no prototype forwarding. These are virtual-controller
+checks, not physical USB/Bluetooth or SDL3 certification. Both source fixes
+still require their rebuilt packaged launcher regression before acceptance.
+
+The preserved-baseline audit found no completed accepted feature missing from
+the current main-based source. SDL2 2.32.10, opt-in lake/camera changes, and
+interrupted upstream merges remain preserved, deferred experiments; none was
+silently promoted or discarded.
+
+## Controlled presentation/audio measurements
+
+On the 7c70907b candidate, 28 sequential 600-frame runs compared Nearest,
+Linear, Sharp, Smooth 2x, Nearest+LCD, Nearest+CRT and Smooth+CRT at native 240
+and ultrawide 384 host width. The second pass reversed the full matrix; first
+60 frames were excluded from cadence/phase statistics. Graphics/audio used
+accelerated Direct3D11 and WASAPI with the normal bridge path, not dummy
+drivers. Builds and other game tests were excluded during timing.
+
+The local Ryzen 7 7745HX laptop (16 logical processors, approximately 16 GB
+RAM; Radeon integrated and RTX 4060 Laptop GPUs reported) measured about
+59.72 FPS native and 59.57-59.71 FPS ultrawide. No measured presentation gap
+exceeded 25 ms; no filter fallback occurred. Smooth did not reproduce a
+large performance collapse in this fixture. The guest phase dominates total
+work and includes game-specific hook work; this is not a CPU-only attribution.
+No speculative runtime optimization was made from these results.
+
+Sampled bridge underruns and concealed-stall counters were zero. However,
+5,430-6,506 dropped source audio frames were already recorded by the first
+120-push checkpoint, with no growth between that and the last checkpoint.
+The initial overflow and audible startup quality remain investigation/listening
+items; zero later underruns is not proof of clean audio. Probes occur every
+120 audio pushes, not video frames, and do not cover the final unsampled tail.
+
+Separate dummy state audits established sustained active battle ownership for
+the wide fixture. Both widths reported three interpreted IWRAM entry points
+and 7,369,280 interpreted instructions; do not extend the cold-boot static
+coverage claim to battle. Package, ROM, BIOS and original state hashes stayed
+unchanged. Private evidence: `perf-7c70907b`, `perf-7c70907b-audit-v2`, and
+`perf-hardware-20261017.json` under the readiness validation directory.
+
+Limits: one English arena fixture with neutral input, exact integer 3x scaling,
+default bridge audio and this developer PC. Sharp intentionally uses nearest
+at integer scale; fractional Sharp, fullscreen, other scenes, Japanese combat,
+weak hardware, physical input and audible quality are not certified here.
+
 ## Open release gates
 
-- Complete controlled performance/real-audio measurements and additional
-  transition coverage where justified; investigate demonstrated bottlenecks,
-  not guesses. The 17-fixture exit route is not every story/boss transition.
+- Follow up initial audio overflow, fractional Sharp and additional scenarios
+  where justified; investigate demonstrated bottlenecks, not guesses. The
+  17-fixture exit route is not every story/boss transition.
 - Verify keyboard-only navigation and physical controller reconnect, including
   disconnect while holding an input. Merely detecting a controller is not proof.
 - Human visual acceptance of field/battle joins, camera edges, UI layout,
@@ -79,8 +143,8 @@ Do not treat that partial report as an entirely passing run.
 - Clean-machine extraction/launch without compiler tooling, separate JP/English
   setup, persistence after moving the complete folder, save import and input
   hardware checks. Do not distribute private test inputs with the candidate.
-- Reconcile preserved local experiments, refresh final candidate for the
-  approved source revision, and run hosted ROM-free CI after approved push.
+- Refresh final candidate for the approved source revision, rerun its input
+  acceptance, and run hosted ROM-free CI after approved push.
 - Resolve distribution/provenance review and obtain explicit approval before
   publishing, pushing/merging changes, or contacting external testers.
 
