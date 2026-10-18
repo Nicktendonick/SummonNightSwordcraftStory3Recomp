@@ -1,5 +1,8 @@
 # Developer workflow
 
+Linux/macOS work is tracked separately in [platform readiness](PLATFORM_READINESS.md).
+Those source checks do not make the Windows portable a cross-platform release.
+
 ## Source identity
 
 Use a recursive Git clone, including the exact `gbarecomp` and `recomp-ui`
@@ -86,9 +89,11 @@ The [ROM-free CI workflow](../.github/workflows/rom-free-tests.yml) uses the sam
 game target/test label and both standalone launcher input checks on a Windows
 runner with MinGW64 packages. Its actions
 are pinned and its token is read-only. No ROMs, BIOS, saves, private captures,
-or generated game code are required or uploaded. The workflow has been
-prepared locally; **a hosted GitHub Actions run remains to be verified after
-the changes are approved and pushed**.
+or generated game code are required or uploaded. The Windows workflow passed
+at game commit `bc856fa2e4ebf1a28dfd8013a7d50f081bd8f274` in
+[run 39092185972](https://github.com/Nicktendonick/SummonNightSwordcraftStory3Recomp/actions/runs/39092185972):
+38 game checks and both standalone launcher input checks. This is not a
+Linux/macOS result or a clean-PC gameplay certification.
 
 When configuring with MSYS2's MinGW64 dependencies, provide the native prefix,
 for example `-DCMAKE_PREFIX_PATH=C:/msys64/mingw64`, and put its `bin` directory

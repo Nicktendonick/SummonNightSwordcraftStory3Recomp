@@ -89,13 +89,10 @@ target_include_directories(SummonNightSwordcraftStory3Recomp PRIVATE
     src)
 
 target_link_libraries(SummonNightSwordcraftStory3Recomp PRIVATE
-    swordcraft3_presentation
-    "-Wl,--start-group"
-    gbarecomp_runtime
-    gbarecomp_debug
-    gbarecomp_gba
-    gbarecomp_armv4t
-    "-Wl,--end-group")
+    swordcraft3_presentation)
+# The engine helper handles cyclic archives with GNU ld but does not send
+# GNU-only --start-group/--end-group switches to Apple's linker or MSVC.
+target_link_gbarecomp_runtime_stack(SummonNightSwordcraftStory3Recomp)
 
 target_compile_definitions(SummonNightSwordcraftStory3Recomp PRIVATE
     GBARECOMP_DEFAULT_DEBUG_PORT=19853
@@ -277,6 +274,12 @@ if(BUILD_TESTING)
                     -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
                     -p "test_${sc3_python_test}.py" -v)
         endforeach()
+        if(NOT WIN32)
+            # This suite tests the Windows PowerShell launch script. Show it
+            # as disabled, not a green suite whose unittest cases all skipped.
+            set_tests_properties(swordcraft3_debug_capture_launcher_unit
+                PROPERTIES DISABLED TRUE)
+        endif()
     endif()
 
     # Build the game repository's source/synthetic tests without requiring any
@@ -297,6 +300,31 @@ if(BUILD_TESTING)
     add_custom_target(swordcraft3_tests DEPENDS ${sc3_test_targets})
     get_property(sc3_directory_tests DIRECTORY PROPERTY TESTS)
     set_tests_properties(${sc3_directory_tests} PROPERTIES LABELS "swordcraft3-rom-free")
+
+    # Link the actual game adapter, renderer, runtime and launcher without any
+    # cartridge-derived source. An empty dispatch table is a LINK TEST ONLY,
+    # never a playable release. Keep it out of the default build and package.
+    # --help returns in main before input lookup, SDL startup or game execution.
+    add_executable(swordcraft3_platform_link_probe EXCLUDE_FROM_ALL
+        src/main.cpp src/adaptive_widescreen.cpp src/custom_renderer.cpp
+        src/swordcraft3_true_map.cpp
+        "${GBARECOMP_ROOT}/tools/bios_smoke/dispatch_stub.cpp")
+    target_include_directories(swordcraft3_platform_link_probe PRIVATE src
+        "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba"
+        "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug")
+    target_link_libraries(swordcraft3_platform_link_probe PRIVATE swordcraft3_presentation)
+    target_link_gbarecomp_runtime_stack(swordcraft3_platform_link_probe)
+    if(SWORDCRAFT3_RECOMP_UI)
+        target_link_libraries(swordcraft3_platform_link_probe PRIVATE swordcraft3_launcher_ui)
+    endif()
+    gbarecomp_stage_mingw_runtime(swordcraft3_platform_link_probe)
+    add_custom_target(swordcraft3_platform_checks
+        DEPENDS swordcraft3_tests swordcraft3_platform_link_probe)
+    add_test(NAME swordcraft3_platform_link_help
+        COMMAND swordcraft3_platform_link_probe --help)
+    set_tests_properties(swordcraft3_platform_link_help PROPERTIES
+        LABELS "swordcraft3-platform" TIMEOUT 15
+        PASS_REGULAR_EXPRESSION "A legally dumped Japanese ROM and verified GBA BIOS are required")
 endif()
 
 # Private fast iteration path: reuse this owner's unchanged English-beta guest
@@ -337,8 +365,8 @@ if(SC3_LAB_GUEST_OBJECT_DIR)
         "${GBARECOMP_ROOT}/src/armv4t" "${GBARECOMP_ROOT}/src/gba"
         "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug")
     target_link_libraries(Swordcraft3CustomRendererBeta PRIVATE swordcraft3_presentation
-        "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug
-        gbarecomp_gba gbarecomp_armv4t swordcraft3_launcher_ui "-Wl,--end-group")
+        swordcraft3_launcher_ui)
+    target_link_gbarecomp_runtime_stack(Swordcraft3CustomRendererBeta)
     target_link_options(Swordcraft3CustomRendererBeta PRIVATE "-Wl,--stack,16777216")
     gbarecomp_stage_mingw_runtime(Swordcraft3CustomRendererBeta)
 endif()
@@ -396,8 +424,8 @@ if(SWORDCRAFT3_PORTABLE_JAPANESE)
         "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/armv4t"
         "${GBARECOMP_ROOT}/src/gba" "${GBARECOMP_ROOT}/src/debug")
     target_link_libraries(Swordcraft3Japanese PRIVATE swordcraft3_presentation
-        "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
-        gbarecomp_armv4t swordcraft3_launcher_ui "-Wl,--end-group")
+        swordcraft3_launcher_ui)
+    target_link_gbarecomp_runtime_stack(Swordcraft3Japanese)
     if(WIN32)
         target_sources(Swordcraft3Japanese PRIVATE "${CMAKE_BINARY_DIR}/beta-icon.rc")
         target_link_options(Swordcraft3Japanese PRIVATE "-Wl,--stack,16777216")
@@ -476,8 +504,8 @@ if(sc3_release_rom)
             target_compile_definitions(${engine} PRIVATE SWORDCRAFT3_BETA_BUILD=1)
         endif()
         target_link_libraries(${engine} PRIVATE swordcraft3_presentation
-            "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
-            gbarecomp_armv4t swordcraft3_launcher_ui "-Wl,--end-group")
+            swordcraft3_launcher_ui)
+        target_link_gbarecomp_runtime_stack(${engine})
         if(WIN32)
             target_sources(${engine} PRIVATE "${CMAKE_BINARY_DIR}/beta-icon.rc")
             target_link_options(${engine} PRIVATE "-Wl,--stack,16777216")
@@ -558,9 +586,8 @@ if(SWORDCRAFT3_BETA_BPS)
         "${GBARECOMP_ROOT}/src/runtime" "${GBARECOMP_ROOT}/src/debug"
         "${SWORDCRAFT3_BETA_DIR}" src)
     target_link_libraries(SummonNightSwordcraftStory3RecompBeta PRIVATE
-        swordcraft3_presentation
-        "-Wl,--start-group" gbarecomp_runtime gbarecomp_debug gbarecomp_gba
-        gbarecomp_armv4t "-Wl,--end-group")
+        swordcraft3_presentation)
+    target_link_gbarecomp_runtime_stack(SummonNightSwordcraftStory3RecompBeta)
     target_sources(SummonNightSwordcraftStory3RecompBeta PRIVATE src/custom_renderer.cpp)
     target_compile_definitions(SummonNightSwordcraftStory3RecompBeta PRIVATE
         SWORDCRAFT3_BETA_BUILD=1 GBARECOMP_DEFAULT_DEBUG_PORT=19854
