@@ -22,11 +22,17 @@ The nine Python suites contain **86 individual tests**. This count does not
 include the engine's separately registered test suite. Private playable-build
 verification is reported separately below.
 
+The host-input test also covers virtual late attachment, held-input removal,
+new connection IDs, backup-controller takeover and menu/pause reconnect through
+the actual SDL event pump. These remain host-level synthetic checks, not a
+physical controller or guest-gameplay certification.
+
 The tested host used native Windows CMake 4.4.0, Ninja
 1.13.0.git.kitware.jobserver-pipe-1, MinGW-w64 GCC/G++ 14.2.0, Python 3.13.1,
 and SDL2 2.30.11. A separate SDL2-upgrade experiment is not silently substituted
-for this baseline. CMake requires 3.20+, a C++20 compiler, and Python 3.11+ for
-the source/packaging tests.
+for this baseline. The root project requires CMake 3.20+, and the standalone
+launcher checks below require CMake 3.24+. Use a C++20 compiler and Python 3.11+
+for the source/packaging tests.
 
 Install the MinGW64 compiler and SDL2 development package, and native CMake,
 Ninja and Python. In PowerShell, from the recursively cloned repository:
@@ -45,6 +51,25 @@ cmake --build build-check --target swordcraft3_tests --parallel 2
 ctest --test-dir build-check -L swordcraft3-rom-free --output-on-failure --no-tests=error
 ```
 
+Run the launcher input regressions separately, with the same MinGW64 PATH:
+
+```powershell
+cmake -S recomp-ui -B build-ui-check -G Ninja `
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+  "-DCMAKE_C_COMPILER=$toolchain/bin/gcc.exe" `
+  "-DCMAKE_CXX_COMPILER=$toolchain/bin/g++.exe" `
+  "-DCMAKE_PREFIX_PATH=$toolchain" `
+  -DSNESRECOMP_SDL_BACKEND=SDL2 -DBUILD_TESTING=ON
+cmake --build build-ui-check --target recomp-ui-scripted-key-test recomp-ui-capture-hotplug-test --parallel 2
+ctest --test-dir build-ui-check -R '^recomp-ui-(scripted-key|capture-hotplug)$' --output-on-failure --no-tests=error
+```
+
+These two additional CTests exercise actual ImGui SDL2 event acceptance,
+keyboard Play focus/activation, and virtual-controller reconnect during binding
+capture. They use synthetic input and require no ROM or BIOS. They do not
+replace physical-controller or full playable-runtime checks. The standalone
+launcher otherwise defaults to SDL3, so the explicit SDL2 option is important.
+
 Each command must succeed before continuing. If tools are not on PATH, invoke
 their full paths and pass `-DCMAKE_MAKE_PROGRAM=C:/path/to/ninja.exe` and
 `-DPython3_EXECUTABLE=C:/path/to/python.exe` when configuring. CMake fetches
@@ -58,7 +83,8 @@ playable release. Assertions remain enabled for the C++ test programs even in
 optimized configurations.
 
 The [ROM-free CI workflow](../.github/workflows/rom-free-tests.yml) uses the same
-target and test label on a Windows runner with MinGW64 packages. Its actions
+game target/test label and both standalone launcher input checks on a Windows
+runner with MinGW64 packages. Its actions
 are pinned and its token is read-only. No ROMs, BIOS, saves, private captures,
 or generated game code are required or uploaded. The workflow has been
 prepared locally; **a hosted GitHub Actions run remains to be verified after
@@ -84,7 +110,13 @@ BIOS generation and both Release engines from local game revision `400942b`
 and the dependency pins above. No old guest object cache was reused. Its portable
 candidate passed dependency/ZIP checks and targeted private runtime regressions.
 This is **not final release certification**: see [coverage and open gates](RELEASE_TESTING.md).
-Later source revisions require their own clean build record and candidate.
+The follow-up candidate `20261018T014625Z-cb841281`, built from game `266a250`,
+the same engine, and UI `be0cc15`, also passed its packaged launcher input and
+language/settings regressions, both-language boot/save replay, and the 21-case
+Repeat-mode matrix (17 normal arenas plus four fallback slots). Earlier
+other-framing/edge/arena-completion routes remain attributed to their original
+binary. Later source revisions require their own
+clean build record and candidate.
 
 From a clean committed checkout, using your own verified private inputs:
 

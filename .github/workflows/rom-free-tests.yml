@@ -1,4 +1,4 @@
-name: ROM-free game tests
+name: ROM-free game and launcher tests
 
 on:
   pull_request:
@@ -46,3 +46,14 @@ jobs:
         run: cmake --build build-ci --target swordcraft3_tests --parallel 2
       - name: Run game-repository checks
         run: ctest --test-dir build-ci -L swordcraft3-rom-free --output-on-failure --no-tests=error
+      - name: Configure standalone SDL2 launcher checks
+        run: |
+          cmake -S recomp-ui -B build-ui-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX")" \
+            -DSNESRECOMP_SDL_BACKEND=SDL2 \
+            -DBUILD_TESTING=ON
+      - name: Build keyboard and virtual-controller checks
+        run: cmake --build build-ui-ci --target recomp-ui-scripted-key-test recomp-ui-capture-hotplug-test --parallel 2
+      - name: Run launcher input checks
+        run: ctest --test-dir build-ui-ci -R '^recomp-ui-(scripted-key|capture-hotplug)$' --output-on-failure --no-tests=error

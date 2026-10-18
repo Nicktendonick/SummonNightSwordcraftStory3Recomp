@@ -211,6 +211,10 @@ It includes the themed launcher/Esc menu and experimental 12:5 presentation.
 It is not a 1.0 release. Unsupported scenes retain their documented fallback.
 Not every game route, spell, controller or clean-machine configuration is tested.
 Historical chest/rewind failures are not claimed fixed by this package.
+Weaker-PC performance is **unverified for this beta**; no minimum hardware
+specification has been established. Local developer-PC benchmarks are not a
+guarantee for slower computers. If performance is poor, report your CPU/GPU,
+Windows version, scene and graphics settings as well as the build identity.
 
 Required input SHA-1 identities:
 
