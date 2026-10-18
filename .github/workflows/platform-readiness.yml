@@ -1,0 +1,63 @@
+name: Linux and macOS build readiness (not a playable release)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-rom-free:
+    name: ROM-free / ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15, macos-15-intel]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout pinned game and submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Checkout the Windows baseline's SDL2 source version
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: libsdl-org/SDL
+          ref: fa24d868ac2f8fd558e4e914c9863411245db8fd # release-2.30.11
+          path: build-platform-deps/SDL
+          persist-credentials: false
+      - name: Install Linux development dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential cmake ninja-build python3 libgl1-mesa-dev \
+            libx11-dev libxext-dev libasound2-dev
+      - name: Install macOS build tools
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja python
+      - name: Record host and tool versions
+        run: |
+          uname -a
+          cmake --version
+          ninja --version
+          python3 --version
+          c++ --version
+          git submodule status --recursive
+      - name: Build native SDL2 (not the SDL3 compatibility layer)
+        run: |
+          cmake -S build-platform-deps/SDL -B build-platform-deps/sdl-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/sc3-sdl2" \
+            -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST=OFF
+          cmake --build build-platform-deps/sdl-build --parallel 2
+          cmake --install build-platform-deps/sdl-build
+      - name: Run the developer shell script (no private inputs)
+        run: sh tools/check_platform.sh --sdl-prefix "$RUNNER_TEMP/sc3-sdl2" --jobs 2
+      # Deliberately no packaged binaries, private inputs, artifact upload,
+      # release publication, signing credentials or gameplay claims.

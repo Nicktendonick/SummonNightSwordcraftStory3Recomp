@@ -1,0 +1,2 @@
+# POSIX scripts must remain executable by sh after a Windows checkout, too.
+*.sh text eol=lf
