@@ -1,6 +1,6 @@
 # Swordcraft Story 3 — Portable Beta
 
-Windows x64. Portable UI test build; publication review is still open.
+Windows x64. Japanese + optional English 1.1.0f candidate; publication review is still open.
 
 This build includes the reorganized launcher and Esc menu. Please test it in a
 new folder and report your Windows version, selected language, graphics settings,
@@ -15,7 +15,7 @@ controller, and steps to reproduce any problem.
    original filenames; originals remain unchanged. Different files with the
    same name get a readable suffix such as `Game (2).gba`.
 4. **Japanese needs no translation patch.** For English, optionally select your
-   released **Hajimari_no_Ishi_v1.0.6.f.bps** in **Mods** and enable it. An already-translated
+   released **Hajimari_no_Ishi_v1.1.0.f.bps** in **Mods** and enable it. An already-translated
    ROM matching this build can also be selected directly.
 5. Press **Play**. Press **Esc** during play for the in-game menu.
 
@@ -58,8 +58,10 @@ in place. Save states and rewind are separate features.
 Home shows the selected game language; expand **Game files** for full paths and
 BIOS options. Japanese uses
 `Saves/japanese.eep` and `Save States/japanese.state1` through `.state10`.
-Released English uses `Saves/english-1.0.6f.eep` and
-`Save States/english-1.0.6f.state1` through `.state10`.
+Released English uses `Saves/english-1.1.0f.eep` and
+`Save States/english-1.1.state1` through `.state10` (the current runtime's shorter
+slot filename). Keep the entire Save States folder backed up when changing
+translation revisions; a filename alone does not establish compatibility.
 Earlier released-English saves remain under their versioned names; save states
 are bound to their exact ROM and are not automatically converted on upgrade.
 Old beta `battery.eep` and `beta.state*` files are preserved, not automatically
@@ -75,7 +77,7 @@ the original Japanese ROM with **Change ROM** in that case.
 
 This package no longer runs the retired English beta translation. The internal
 engine filename still contains `Beta` for starter compatibility; its English
-code and ROM verification are for release **1.0.6.f**.
+code and ROM verification are for release **1.1.0.f**.
 
 The Esc menu offers **Pause**, **Resume**, **Reset game** and **Quit game**.
 Choose whether opening the menu automatically pauses play. Reset/Close ask for
@@ -126,15 +128,18 @@ stretched or zoomed. At 16:9 it uses the whole 284-column opening. This does not
 invent missing art or guarantee that intentionally transparent scenery is filled.
 **Repeat scenery** keeps Current's centered view and uses the whole width with
 no side frame. Past the arena's authored edges, each row of scenery continues
-with the arena's own repeating pattern (for example the forest's trees), and
-the perspective floors continue as a mirror image, the same way their halves
-already meet in the middle. The distant backdrop repeats through its own
-period. Characters, collision and the camera are unchanged; only what is drawn
-in the side margins differs.
+with the arena's own repeating pattern (for example the forest's trees).
+Perspective floors use a shared repeating period per side, without mirroring
+the floor. Selected scenery joins use reviewed reflections or blended joins
+to complete cut-off objects. The distant backdrop uses its own layout and
+period; an arena without a backdrop stays that way. Characters, collision and
+the camera are unchanged; only scenery continuation differs.
 
-All three experiments cover reviewed arenas 0, 2, 3 and 7; other arenas retain
-their existing fallback. Locked/special scenes and out-of-envelope raster
-schedules retain Current framing.
+Repeat scenery now covers all 17 standard battle arena IDs (0–16) when the
+game state and layer layout pass the renderer's guards. This does not certify
+every spell, encounter or story sequence. Locked/special scenes, unsupported
+layouts and out-of-envelope raster schedules retain their fallback. Some
+repeated objects or joins may still be noticeable.
 
 These options are mutually exclusive. Choose **Current** to restore the
 original view. **Cover scenery edges** requires **Follow + edge stops** and
@@ -201,19 +206,23 @@ If frame rate suffers, choose Nearest or Sharp with screen effects Off.
 
 ## Compatibility
 
-This candidate adds separate Japanese/English engines and readable imported
-filenames to the prerelease06 checkpoint. The launcher selects the engine by
+This candidate uses separate Japanese/English 1.1.0f engines and readable imported
+filenames. The launcher selects the engine by
 verified ROM contents, not its filename; the translation is optional.
 It includes the themed launcher/Esc menu and experimental 12:5 presentation.
 It is not a 1.0 release. Unsupported scenes retain their documented fallback.
 Not every game route, spell, controller or clean-machine configuration is tested.
 Historical chest/rewind failures are not claimed fixed by this package.
+Weaker-PC performance is **unverified for this beta**; no minimum hardware
+specification has been established. Local developer-PC benchmarks are not a
+guarantee for slower computers. If performance is poor, report your CPU/GPU,
+Windows version, scene and graphics settings as well as the build identity.
 
 Required input SHA-1 identities:
 
 - Japanese ROM: `3f5253fcf57e07ce52472bd29a61d16b98a12376`
 - GBA BIOS: `300c20df6731a33952ded8c436f7f186d25d3492`
-- Translated output (1.0.6.f): `6753a22a096b8adaa3a869333b99fcfe29ba1fec`
+- Translated output (1.1.0.f): `99ca58319b050c238b1cb61cbc6db7b418b5472c`
 
 A newer translation may require a new executable. No compiler or self-healing
 cache is included; untested dynamic-code paths remain a limitation.
@@ -224,7 +233,9 @@ your old installation or copy old settings blindly.
 
 ## Package records
 
-`Runtime/package-manifest.json` records source/build identities.
+`Runtime/package-manifest.json` records exact source/build identities and the
+verified translation target. A clean build record binds the original EXEs and
+DLLs to those revisions before packaging and stripping copied files.
 `Runtime/SHA256SUMS.txt` covers packaged files except itself. These describe the
 untouched ZIP; normal play deliberately creates local data.
 

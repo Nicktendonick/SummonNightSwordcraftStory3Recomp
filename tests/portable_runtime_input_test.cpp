@@ -29,10 +29,7 @@ int main() {
     SDL_setenv("SDL_RENDER_DRIVER", "software", 1);
     SDL_setenv("SDL_AUDIODRIVER", "dummy", 1);
     CHECK(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) == 0);
-    const int index = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_GAMECONTROLLER, 6, 15, 0);
-    CHECK(index >= 0 && SDL_IsGameController(index));
-    SDL_Joystick* joystick = SDL_JoystickOpen(index);
-    CHECK(joystick);
+    CHECK(SDL_NumJoysticks() == 0);
     gbarecomp::HostWindow window;
     // HostWindow uses the C-runtime environment; SDL's DLL may use a different
     // Windows CRT and its SDL_setenv does not update this module's getenv cache.
@@ -64,12 +61,49 @@ int main() {
     {
         std::ofstream f(root/"custom.ini");
         // Deliberately not config.ini: test the actual runtime override.
-        f << "[Launcher]\nplayer_pad_0=3\nassist_rewind_pad=0\nassist_fast_pad=111\n";
+        // Portable button bindings are SDL button + 1; zero is unbound.
+        f << "[Launcher]\nplayer_pad_0=3\nassist_rewind_pad=1\nassist_fast_pad=111\n";
     }
     window.load_input_config(root.string().c_str(), true, 4, "custom.ini", "missing.ini");
     auto sample = [&]() {
         SDL_JoystickUpdate(); return window.pump();
     };
+    auto neutral = [](const gbarecomp::HostWindow::Events& event) {
+        CHECK(event.keyinput == 0x03FF && !event.fast_forward && !event.rewind);
+        CHECK(!event.quit && !event.toggle_pause && !event.debug_export);
+        CHECK(event.save_slot == 0 && event.load_slot == 0);
+    };
+    std::vector<SDL_JoystickID> connection_ids;
+    auto attach = [&]() {
+        const int device = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_GAMECONTROLLER, 6, 15, 0);
+        CHECK(device >= 0 && SDL_IsGameController(device));
+        auto* pad = SDL_JoystickOpen(device);
+        CHECK(pad);
+        const auto id = SDL_JoystickInstanceID(pad);
+        CHECK(id >= 0);
+        for (auto old : connection_ids) CHECK(old != id);
+        connection_ids.push_back(id);
+        CHECK(SDL_JoystickSetVirtualAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT, -32768) == 0);
+        CHECK(SDL_JoystickSetVirtualAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, -32768) == 0);
+        return pad;
+    };
+    auto detach = [](SDL_Joystick*& pad) {
+        CHECK(pad);
+        const auto id = SDL_JoystickInstanceID(pad);
+        int device = -1;
+        for (int i = 0; i < SDL_NumJoysticks(); ++i)
+            if (SDL_JoystickGetDeviceInstanceID(i) == id) device = i;
+        // Device indices change after removals; resolve the exact virtual target.
+        CHECK(device >= 0 && SDL_JoystickIsVirtual(device));
+        CHECK(SDL_JoystickDetachVirtual(device) == 0);
+        SDL_JoystickClose(pad);
+        pad = nullptr;
+    };
+    neutral(sample());
+    // Late attach reaches the already-open host through real SDL lifecycle
+    // events. Do not inject DEVICEADDED/REMOVED or reopen the host to mask bugs.
+    SDL_Joystick* joystick = attach();
+    neutral(sample());
     // F10 must work without enabling debugger F2..F9 or taking over save slots.
     auto capture_env = [](const char* name, const char* value) {
 #ifdef _WIN32
@@ -132,6 +166,44 @@ int main() {
     CHECK(sample().fast_forward);
     SDL_JoystickSetVirtualAxis(joystick, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, -32768);
     CHECK(!sample().fast_forward);
+    for (int held = 0; held < 3; ++held) {
+        if (held == 0) {
+            CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_X, 1) == 0);
+            CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_DPAD_LEFT, 1) == 0);
+            CHECK((sample().keyinput & ((1 << 0) | (1 << 5))) == 0);
+        } else if (held == 1) {
+            CHECK(SDL_JoystickSetVirtualAxis(joystick, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, 32767) == 0);
+            CHECK(sample().fast_forward);
+        } else {
+            CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_A, 1) == 0);
+            CHECK(sample().rewind);
+        }
+        detach(joystick); // intentionally do not release the held input first
+        for (int i = 0; i < 3; ++i) neutral(sample());
+        joystick = attach();
+        neutral(sample());
+        CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_X, 1) == 0);
+        CHECK((sample().keyinput & 1) == 0); // custom mapping survived reconnect
+        CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_X, 0) == 0);
+        neutral(sample());
+    }
+    // Preserve the current first-available policy: a connected backup takes
+    // over on removal; reconnecting the original does not steal it back.
+    SDL_Joystick* backup = attach();
+    neutral(sample());
+    CHECK(SDL_JoystickSetVirtualButton(backup, SDL_CONTROLLER_BUTTON_X, 1) == 0);
+    neutral(sample());
+    detach(joystick);
+    CHECK((sample().keyinput & 1) == 0);
+    joystick = attach();
+    CHECK((sample().keyinput & 1) == 0);
+    CHECK(SDL_JoystickSetVirtualButton(backup, SDL_CONTROLLER_BUTTON_X, 0) == 0);
+    CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_DPAD_LEFT, 1) == 0);
+    neutral(sample());
+    detach(backup);
+    CHECK((sample().keyinput & (1 << 5)) == 0);
+    CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_DPAD_LEFT, 0) == 0);
+    neutral(sample());
     // Real SDL event translation, with no desktop input or game execution.
     int actions = 0;
     RecompRuntimeUiStandardConfig menu{};
@@ -225,6 +297,29 @@ int main() {
     ui->editing_text = 0;
 #endif
     keyboard(SDL_SCANCODE_ESCAPE); CHECK(!recomp_runtime_ui_is_open(ui));
+    for (bool paused : {false, true}) {
+        keyboard(SDL_SCANCODE_ESCAPE);
+        CHECK(recomp_runtime_ui_is_open(ui));
+        if (paused) CHECK(recomp_runtime_ui_activate(ui, RECOMP_RUNTIME_UI_KEY_PAUSE));
+        window.set_game_paused(paused);
+        CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_X, 1) == 0);
+        neutral(sample()); // open menu suppresses guest button input
+        detach(joystick);
+        neutral(sample());
+        CHECK(recomp_runtime_ui_is_open(ui) && state.paused == paused);
+        CHECK(state.destructive == 0 && !recomp_runtime_ui_confirmation_pending(ui));
+        joystick = attach();
+        neutral(sample());
+        CHECK(recomp_runtime_ui_is_open(ui) && state.paused == paused);
+        keyboard(SDL_SCANCODE_ESCAPE);
+        window.set_game_paused(false);
+        CHECK(!recomp_runtime_ui_is_open(ui) && !state.paused);
+        neutral(sample());
+        CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_X, 1) == 0);
+        CHECK((sample().keyinput & 1) == 0);
+        CHECK(SDL_JoystickSetVirtualButton(joystick, SDL_CONTROLLER_BUTTON_X, 0) == 0);
+        neutral(sample());
+    }
     window.set_audio_enabled(true); CHECK(window.audio_enabled());
     window.set_game_paused(true); CHECK(window.audio_enabled()); // pause is not a mute preference
     window.set_audio_enabled(false); window.set_game_paused(false); CHECK(!window.audio_enabled());
@@ -293,11 +388,11 @@ int main() {
     }
     window.set_runtime_ui(nullptr);
     recomp_runtime_ui_destroy(ui);
+    detach(joystick);
+    neutral(sample());
     window.close();
-    SDL_JoystickClose(joystick);
-    SDL_JoystickDetachVirtual(index);
     SDL_Quit();
     CHECK(!window.set_screen_model(3));
-    std::cout << "PASS: runtime input, menu/audio, 180 colour/scaler/effect/width combinations, transaction rejection, device reset, fractional Sharp, zero strength, menu overlay\n";
+    std::cout << "PASS: runtime input, virtual late attach/held detach/reconnect/backup takeover/menu-pause hotplug, menu/audio, 180 colour/scaler/effect/width combinations, transaction rejection, device reset, fractional Sharp, zero strength, menu overlay\n";
     return 0;
 }
