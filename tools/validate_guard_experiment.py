@@ -14,17 +14,17 @@ import shutil
 import subprocess
 import time
 
-from benchmark_presentation_filters import ROOT, OWNER, DEFAULT_STATE, digest
+from benchmark_presentation_filters import ROOT, OWNER, digest
 
 
 class Session:
-    def __init__(self, out, enabled, exe=None, rom=None, diagnostic_env=None, battery_source=None, camera=None, camera_mode=None, edge_cover=None):
+    def __init__(self, out, enabled, exe=None, rom=None, diagnostic_env=None, battery_source=None, camera=None, camera_mode=None, edge_cover=None, bios=None):
         self.out = out
         out.mkdir()
         (out/'Settings').mkdir()
         (out/'Settings/guard.ini').write_text('[Launcher]\nselect_guard = '+str(int(enabled))+'\n', encoding='utf-8')
         if camera_mode is not None:
-            assert camera_mode in (0,1,2) and camera is None
+            assert camera_mode in (0,1,2,3) and camera is None
             (out/'Settings/battle-camera.ini').write_text('[Launcher]\nbattle_camera_mode = '+str(camera_mode)+'\n',encoding='utf-8')
             if edge_cover is not None:
                 assert isinstance(edge_cover, bool)
@@ -55,7 +55,7 @@ class Session:
         self.exe = exe or ROOT/'build-native/Swordcraft3CustomRendererBeta.exe'
         self.rom = rom or OWNER/'build-beta/rom-patch-cache/swordcraft3_beta.gba'
         args = [str(self.exe), '--no-launcher', '--tcp', str(port),
-                '--rom', str(self.rom), '--bios', str(OWNER/'gbarecomp/bios/gba_bios.bin'),
+                '--rom', str(self.rom), '--bios', str(bios or OWNER/'gbarecomp/bios/gba_bios.bin'),
                 '--save', str(out/'isolated.eep'), '--view-width', '240', str(ROOT/'native-test.toml')]
         self.stdout = (out/'stdout.log').open('wb')
         self.stderr = (out/'stderr.log').open('wb')
@@ -125,19 +125,35 @@ class Session:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--state', type=Path, default=DEFAULT_STATE)
-    parser.add_argument('--exe', type=Path, default=ROOT/'build-native/Swordcraft3CustomRendererBeta.exe')
-    parser.add_argument('--japanese-exe', type=Path, default=ROOT/'build-native/Swordcraft3Japanese.exe')
+    parser.add_argument('--state', type=Path, required=True, help='Same-ROM manual battle state with Guard in R slot 0')
+    parser.add_argument('--field-state', type=Path, help='Same-ROM noncombat state, required unless --probe')
+    parser.add_argument('--exe', type=Path, required=True)
+    parser.add_argument('--rom', type=Path, required=True)
+    parser.add_argument('--bios', type=Path, required=True)
+    parser.add_argument('--japanese-exe', type=Path, required=True)
+    parser.add_argument('--japanese-rom', type=Path, required=True)
+    parser.add_argument('--output', type=Path, help='New isolated output directory under this checkout/validation')
     parser.add_argument('--probe', action='store_true')
     args = parser.parse_args()
-    out = ROOT / ('validation/guard-' + str(time.time_ns()))
+    if not args.probe and args.field_state is None:
+        parser.error('--field-state is required unless --probe')
+    for name in ('state', 'field_state', 'exe', 'rom', 'bios', 'japanese_exe', 'japanese_rom'):
+        path = getattr(args, name)
+        if path is not None:
+            path = path.resolve(strict=True)
+            if not path.is_file():
+                parser.error('--' + name.replace('_', '-') + ' must be a file')
+            setattr(args, name, path)
+    out = (args.output or ROOT / ('validation/guard-' + str(time.time_ns()))).resolve()
+    if not out.is_relative_to(ROOT / 'validation') or out == ROOT / 'validation':
+        parser.error('Use a new directory under this checkout/validation')
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.mkdir()
-    protected = {str(p): digest(p) for p in (args.state, OWNER/'gbarecomp/bios/gba_bios.bin',
-        OWNER/'build-beta/rom-patch-cache/swordcraft3_beta.gba')}
+    protected = {str(p): digest(p) for p in (args.state, args.bios, args.rom, args.japanese_rom)}
     binaries = {str(p): digest(p) for p in (args.exe,args.japanese_exe)}
     report = dict(passed=False, inputs=protected, executable_sha256=binaries, cases={})
     additional = {}
-    field = OWNER/'validation/visible-debugger/20260827-130539-beta/captures/frame-0000019663-1787850529742/state.gbas'
+    field = args.field_state
     if not args.probe:
         protected[str(field)] = digest(field)
     print('Evidence: '+str(out), flush=True)
@@ -145,8 +161,8 @@ def main():
         for enabled in (False, True):
             # Production regression deliberately conflicts with the retired
             # environment flag; the saved choice must win for On AND Off.
-            session = Session(out/('enabled' if enabled else 'native'), enabled,args.exe,
-                diagnostic_env={'SWORDCRAFT3_SELECT_GUARD':str(int(not enabled))})
+            session = Session(out/('enabled' if enabled else 'native'), enabled,args.exe,args.rom,
+                diagnostic_env={'SWORDCRAFT3_SELECT_GUARD':str(int(not enabled))}, bios=args.bios)
             try:
                 button = 0x3fb if enabled else 0x3fd
                 rows = session.case(args.state, [(0x3ff, 8), (button, 30), (0x3ff, 12)])
@@ -166,7 +182,7 @@ def main():
                     report['cases'][label+'-ordinary'] = additional[label]
                     report['cases'][label+'-field'] = session.case(field,
                         [(0x3ff,8),(0x3fb,12),(0x3ff,12),(0x3fe,3),(0x3ff,10)])
-                    assert all(r['phase']!=4 for r in report['cases'][label+'-field']), 'Field fixture not negative'
+                    assert all(r['root'] != 0x03000000 for r in report['cases'][label+'-field']), 'Field fixture entered combat'
                     for name, sequence in (
                         ('airborne', [(0x3ff,8),(0x3bf,6),(button & ~0x40,16),(0x3ff,30)]),
                         ('pause-release', [(0x3ff,8),(button,12),(0x3f7,3),(0x3ff,30),
@@ -213,18 +229,18 @@ def main():
                 assert [r['player'] for r in report['cases']['B-'+name]] == [r['player'] for r in report['cases']['select-'+name]], name+' native player state differs'
             # Independently boot the Japanese corpus, never load an English
             # snapshot into it. Combat coverage here remains English-only.
-            jp_rom = OWNER/'release/swordcraft3_jp - Copy.gba'
+            jp_rom = args.japanese_rom
             protected[str(jp_rom)] = digest(jp_rom)
             jp_hashes = []
             for enabled in (False,True):
                 jp = Session(out/('jp-on' if enabled else 'jp-off'),enabled,
                     args.japanese_exe,jp_rom,
-                    diagnostic_env={'SWORDCRAFT3_SELECT_GUARD':str(int(not enabled))})
+                    diagnostic_env={'SWORDCRAFT3_SELECT_GUARD':str(int(not enabled))}, bios=args.bios)
                 try:
                     rows = []
                     for key,count in ((0x3ff,120),(0x3fe,3),(0x3ff,180),(0x3fb,3),(0x3ff,60)):
                         for _ in range(count): rows.append(jp.step(key))
-                    assert all(r['phase']!=4 for r in rows)
+                    assert all(r['root'] != 0x03000000 for r in rows)
                     jp_hashes.append([r['hashes'] for r in rows])
                     report['cases']['japanese-'+str(enabled)] = rows
                 finally: jp.close()
@@ -234,6 +250,7 @@ def main():
     finally:
         report['inputs_unchanged'] = all(digest(Path(p)) == h for p,h in protected.items())
         report['executables_unchanged'] = all(digest(Path(p)) == h for p,h in binaries.items())
+        report['passed'] = report['passed'] and report['inputs_unchanged'] and report['executables_unchanged']
         (out/'report.json').write_text(json.dumps(report, indent=2))
         assert report['inputs_unchanged']
         assert report['executables_unchanged']

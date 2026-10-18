@@ -41,8 +41,9 @@ features; options and compatibility depend on the installed build.
 
 **Release-readiness work is in progress.** Merging source does not update an
 already-installed portable. The packaging recipe and player README now target
-**1.1.0f**. Fresh playable-build and candidate acceptance checks must finish
-before publishing a new portable. Do not relabel an old ZIP as a new build.
+**1.1.0f**. A fresh two-language build and local candidate checks have passed;
+[remaining acceptance gates](docs/RELEASE_TESTING.md) must be resolved before
+publishing. Do not relabel an old ZIP as a new build.
 
 ## Build or contribute
 
@@ -59,6 +60,7 @@ invitation requirement; a fresh recursive clone was checked on October 16, 2026.
 
 - [Developer workflow and current build verification](docs/DEVELOPMENT.md)
 - [Developer tool index](tools/README.md)
+- [Modding entry points and compatibility boundaries](docs/MODDING.md)
 - [Renderer design and investigation handoff](docs/HANDOFF.md) — historical
   observations must be checked against current code.
 - [Portable packaging recipe](tools/package_portable_release.py) — requires a

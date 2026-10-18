@@ -16,9 +16,11 @@ The release-readiness baseline is merged PR #12, game commit
 
 The October 16 clean-clone check retrieved both pinned submodules, compiled
 the game-repository test targets without private inputs or old object caches,
-and passed all **37 registered game checks** (29 C++ test programs and eight
-Python suites). The eight Python suites contain 66 individual tests. This does
-not include the engine's separately registered test suite or a playable build.
+and passed all 37 checks then registered. The October 17 expanded suite passed
+**38 registered game checks** (29 C++ test programs and nine Python suites).
+The nine Python suites contain **86 individual tests**. This count does not
+include the engine's separately registered test suite. Private playable-build
+verification is reported separately below.
 
 The tested host used native Windows CMake 4.4.0, Ninja
 1.13.0.git.kitware.jobserver-pipe-1, MinGW-w64 GCC/G++ 14.2.0, Python 3.13.1,
@@ -77,9 +79,12 @@ DLLs from unrelated websites. Portable packaging must stage the matching DLLs.
 
 ## Playable build and packaging status
 
-A complete fresh Japanese/English playable build is **not yet certified** by
-this record. The following build helper and 1.1.0f packaging recipe are under
-verification; runtime acceptance and external-machine testing remain separate.
+On October 17, the build helper completed fresh Japanese/English 1.1.0f and
+BIOS generation and both Release engines from local game revision `400942b`
+and the dependency pins above. No old guest object cache was reused. Its portable
+candidate passed dependency/ZIP checks and targeted private runtime regressions.
+This is **not final release certification**: see [coverage and open gates](RELEASE_TESTING.md).
+Later source revisions require their own clean build record and candidate.
 
 From a clean committed checkout, using your own verified private inputs:
 
@@ -140,4 +145,5 @@ game memory or copyrighted input images.
    separate decisions, not consequences of building successfully.
 
 See [tool index](../tools/README.md) and
-[historical documentation](history/README.md) for investigation leads.
+[modding entry points](MODDING.md). [Historical documentation](history/README.md)
+remains available for investigation, not as a current launch recipe.

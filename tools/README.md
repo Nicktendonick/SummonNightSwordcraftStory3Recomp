@@ -28,7 +28,16 @@ they are not a general fresh-build or release procedure.
   requires compatible private ROM/state inputs and a debug-enabled build.
 - `benchmark_combat_tcp.py`: controlled combat performance measurements.
 - `validate_f10_capture.py`: capture behavior checks with private test inputs.
-- `validate_ui_cleanup.py`: launcher/Esc organization verification workflow.
+- `validate_portable_ui.py`: current packaged-launcher language switching,
+  graphics parity/persistence, readable import names and malformed-ROM refusal.
+  Requires explicit package/ROM/BIOS/patch paths and a new output directory.
+  Runs real desktop UI through scripted input with dummy audio, not human input.
+- `validate_guard_experiment.py`: explicit current binary/ROM/BIOS and same-ROM
+  combat/field fixtures; compares held Guard timing, R slots, ordinary inputs,
+  noncombat Select and independent Japanese startup with the mod on/off.
+  Its legacy name does not mean it only tests the old experimental binary.
+- `validate_ui_cleanup.py`: historical 1.0.6f UI-copy/promotion workflow; not
+  the current candidate test or a safe default for another installation.
 - `ghidra/sc3_ghidra.py`: historical analysis helper; inspect its configuration
   and ROM variant support before using it for a newer translation.
 

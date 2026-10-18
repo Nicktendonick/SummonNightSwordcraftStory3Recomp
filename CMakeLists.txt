@@ -271,7 +271,7 @@ if(BUILD_TESTING)
                 -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
                 -p "test_audit_widescreen_route.py" -v)
         foreach(sc3_python_test IN ITEMS arena_audit debug_capture_launcher
-                lab_shadow_codegen package_alpha portable_release_package translation106_audit)
+                lab_shadow_codegen package_alpha portable_release_package portable_ui_validation translation106_audit)
             add_test(NAME swordcraft3_${sc3_python_test}_unit
                 COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
                     -s "${CMAKE_CURRENT_SOURCE_DIR}/tests"
