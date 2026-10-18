@@ -3,7 +3,71 @@
 Status: local candidate under test, **not approved for publication**.
 This record separates evidence about one binary from checks still needed.
 
-## Tested identity
+## Current candidate and acceptance status — October 18
+
+Use candidate **`20261018T030300Z-3a40354c`** for the remaining hands-on checks,
+not one of the historical diagnostic candidates below. The archive is
+`Swordcraft-Story-3-Portable-Beta-Windows-x64-CANDIDATE.zip` (76,581,314 bytes),
+with SHA-256:
+
+`0108996753ef1d1b07c144ba47d59cb63320e2fb530be6a8413feaaad7e8c122`
+
+Its manifest identifies game `bc856fa2e4ebf1a28dfd8013a7d50f081bd8f274`, engine
+`3a7e974759b2a79ad4144396d571da6f004ba393` and UI
+`be0cc150a149cc71577e3f1277e675c3c96261ea`. This is a candidate from a clean
+review branch, **not yet merged main or a published release**. Game PR
+[#14](https://github.com/Nicktendonick/SummonNightSwordcraftStory3Recomp/pull/14)
+and UI PR [#1](https://github.com/Nicktendonick/recomp-ui/pull/1) remain review
+items. A later documentation-only commit does not change the ZIP's revision.
+
+Exact-candidate checks completed:
+
+- Independent ZIP allowlist/empty-data/manifest/checksum verification and
+  first launch with no private inputs, a compiler-free PATH and a different
+  working directory, on the developer PC.
+- Both-language 600-frame cold boots with zero dispatch misses, exact
+  CPU/memory/PPU state restoration and deterministic 120-frame replay.
+- Scripted desktop launcher language selection (JP, JP+BPS, return to JP and
+  prepatched English), readable filenames, invalid-ROM refusal, all presets,
+  custom persistence, three aspects, seven pages, translation under Mods and
+  Backspace-to-Play followed by Return.
+- Whole-folder relocation in a disposable copy. The actual top-level starter
+  found its new root; language/ROM/BIOS references and graphics preferences
+  persisted. Bounded engine checks then loaded the English state and booted
+  Japanese separately. The English runtime slot filename is
+  `Save States/english-1.1.state1`, not the longer translation label. Original
+  inputs and the pristine ZIP were unchanged. This was not a native save-import
+  picker, physical-controller or separate-PC test.
+
+Private evidence: `boot-pkg-3a40354c-release`, `relocation-3a40354c-v2`,
+`first-run-pkg-3a40354c.json` under the readiness validation directory, and
+`validation/ui-3a40354c` under the owner project. The first relocation attempt
+is retained as a failure: its strict-static harness incorrectly rejected a
+known interpreted IWRAM path. The corrected run used normal bridge policy,
+with self-healing compilation disabled; this is not a new full-static claim.
+
+The immediately preceding `20261018T025221Z-b27e8598` candidate passed the
+both-language Esc/pause/resume/reset/close and F10 suites, detailed Guard suite,
+and 21-case Repeat arena matrix (17 standard arenas and four fallback slots).
+Those tests were **not relabelled as runs of 3a40354c**. The seven PE binaries'
+loaded-section hashes, imports and entry RVAs match between the two candidates;
+whole-file hashes need not match. The final source change was the save-slot
+filename documentation correction. Earlier other-framing, paired-edge and
+arena-completion routes retain their original identities below.
+
+Hosted Windows source tests passed at the exact candidate source commit:
+[run 39092185972](https://github.com/Nicktendonick/SummonNightSwordcraftStory3Recomp/actions/runs/39092185972)
+(38 game CTests and two standalone launcher CTests). CI did not use private game
+inputs and does not certify playable clean-machine behavior.
+
+**Owner decision:** keep beta acceptance pending clean-Windows launch,
+physical-controller behavior and human visual/audio review. Only weaker-PC
+testing was explicitly left unverified for this beta. Native Linux/macOS
+preparation in separate PR
+[#15](https://github.com/Nicktendonick/SummonNightSwordcraftStory3Recomp/pull/15)
+does not waive Windows acceptance or create another playable package.
+
+## Historical tested identity
 
 October 17 candidate `20261017T031439Z-a60c6fd3` was built from game revision
 `400942bc39fa9e49ca35897c02e84972b12f8b3a`, engine
@@ -233,8 +297,10 @@ process's unsampled shutdown tail. Evidence:
 - Clean-machine extraction/launch without compiler tooling, separate JP/English
   setup, persistence after moving the complete folder, save import and input
   hardware checks. Do not distribute private test inputs with the candidate.
-- Refresh final candidate for the approved source revision, rerun its input
-  acceptance, and run hosted ROM-free CI after approved push.
+- The current candidate and its input/boot checks plus hosted CI are recorded
+  above. Once a source revision is approved for release, verify that its
+  manifest and tested code match; any code or payload change needs appropriate
+  fresh validation. Do not publish an older candidate under a new build label.
 - Resolve distribution/provenance review and obtain explicit approval before
   publishing, merging changes, or contacting external testers. The owner
   authorized pushing the readiness and UI dependency branches and opening
@@ -244,6 +310,37 @@ For external testing, record the exact ZIP hash, test machine and each outcome
 as pass/fail/not tested, with reproduction steps. Keep the old installation and
 saves backed up. Unavailable gates remain open unless the owner explicitly
 changes the release scope; a green unit test run does not waive them.
+
+## Hands-on acceptance worksheet
+
+Use a fresh extraction of the current ZIP, not an installation already played.
+Keep the old installation and all original saves intact. These are instructions
+for an authorized human tester, not evidence that any item has passed. Leave an
+item **not tested** until somebody actually performs it; record failures rather
+than working around them silently.
+
+Record once: ZIP SHA-256, Windows version, CPU/GPU, controller model, connection
+(USB/Bluetooth), selected language, graphics settings and test date. Specify
+whether this is a genuinely separate clean PC without the developer toolchain.
+
+| Check | What to record | Result |
+| --- | --- | --- |
+| Clean Windows startup | Extract whole ZIP into a new writable folder; run the top-level EXE without installing compiler tools; report any missing-DLL or startup error | Not tested |
+| Japanese and English | Import own verified ROM/BIOS; play Japanese without a patch, enable English 1.1.0f in Mods, then return to Japanese; confirm separate save banks | Not tested |
+| Physical controls | Test both keyboard and controller in launcher and game; unplug while holding movement, fast-forward or rewind, then reconnect; no stuck input or lost mapping | Not tested |
+| Guard behavior | Enable/disable the mod, hold/release Select during combat, check R-slot retention and ordinary Select outside combat | Not tested |
+| Session controls | Esc opens/closes; automatic pause on/off; separate Pause/Resume; cancel and confirm Reset/Quit, using disposable progress | Not tested |
+| Save and folder move | Use an ordinary in-game save; import a backed-up copy only into a disposable installation; close and move the whole folder; reopen and verify both languages' data | Not tested |
+| Human graphics review | Review field/battle scenery joins, both arena edges, movement/jumps/spells/effects, all aspect choices, presets and UI layout; record arena and settings for problems | Not tested |
+| Human audio review | Listen during cold start, battle, transitions, pause/resume and a normal save/load; distinguish clicks, sustained crackle and pacing problems | Not tested |
+| F10 and reports | Confirm capture feedback and new capture directory; keep capture data private unless specifically requested and reviewed for sharing | Not tested |
+
+For any failure, record expected/actual behavior and minimal steps, plus whether
+it occurs in Original GBA/Current with Original Pixels. Those settings are a
+diagnostic comparison, not a reason to accept a broken advertised option.
+Human arena review is not implied for all 17 arenas when only one is accessible;
+name the arenas actually inspected. No claim of original-hardware visual/audio
+equivalence follows from a tester saying the result looks or sounds acceptable.
 
 ## Explicit beta scope limitation
 
