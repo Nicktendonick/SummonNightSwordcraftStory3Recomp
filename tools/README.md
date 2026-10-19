@@ -5,18 +5,21 @@ scripts. Start with [developer instructions](../docs/DEVELOPMENT.md).
 
 ## Build and packaging
 
-- `build_portable.ps1`: reproducible Windows Japanese + English 1.1.0f build;
+- `build_portable.ps1`: reproducible Windows Japanese + English 1.1.1f build;
   verifies input hashes, regenerates private code, and records clean revisions
   and output hashes. It does not reuse the old experimental object cache.
 - `generate.ps1` / `generate_bios.ps1`: private code generation for verified
   local inputs. Generated game and BIOS code must never be committed.
 - `package_portable_release.py`: allowlisted portable candidate construction,
   dependency auditing, manifest, hashes, and archive verification. Its target
-  is Japanese + English 1.1.0f, selected by `packaging/portable-beta/target.json`.
+  is Japanese + English 1.1.1f, selected by `packaging/portable-beta/target.json`.
   Packaging requires the matching `portable-build.json`; use explicit
   `--build-dir` and `--owner-root` for nested developer checkouts.
 - `package_alpha.py`: historical packager **and active shared audit helpers**.
   Other packagers import it; do not delete it based on its name.
+- `audit_translation111_inputs.py`: read-only private-input identity, guarded
+  hook/code-copy and arena-map comparison against verified English 1.1.0f.
+  It writes only a new hash/offset report, not a patched ROM or converted save.
 
 Read a tool's arguments and preconditions before use. Several historical
 promotion/update scripts target specific existing local test installations;

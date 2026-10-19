@@ -78,12 +78,12 @@ class PortableArchiveTests(unittest.TestCase):
             self.make_zip()
             self.assertEqual(len(package.verify_archive(self.archive)["files"]), len(self.files))
 
-    def test_current_recipe_uses_110_engines(self):
+    def test_current_recipe_uses_111_engines(self):
         self.recipe.stop()
         files = {dest: source.name for source, dest in package.recipe(resolve_build=False)}
-        self.assertEqual(files["Runtime/" + package.GAME], "Swordcraft3Translation110.exe")
-        self.assertEqual(files["Runtime/" + package.JAPANESE], "Swordcraft3Japanese110.exe")
-        self.assertEqual(package.TARGET["english_revision"], "1.1.0f")
+        self.assertEqual(files["Runtime/" + package.GAME], "Swordcraft3Translation111.exe")
+        self.assertEqual(files["Runtime/" + package.JAPANESE], "Swordcraft3Japanese111.exe")
+        self.assertEqual(package.TARGET["english_revision"], "1.1.1f")
 
     def test_wrong_translation_metadata_rejected(self):
         # Write a self-consistent archive for an older recipe, then verify it

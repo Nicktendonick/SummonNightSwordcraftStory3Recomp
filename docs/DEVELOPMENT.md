@@ -123,7 +123,7 @@ From a clean committed checkout, using your own verified private inputs:
 ```powershell
 ./tools/build_portable.ps1 `
   -JapaneseRom 'C:/private/swordcraft3_jp.gba' `
-  -EnglishRom 'C:/private/Swordcraft Story 3 English 1.1.0f.gba' `
+  -EnglishRom 'C:/private/Swordcraft Story 3 English 1.1.1f.gba' `
   -Bios 'C:/private/gba_bios.bin' `
   -BuildDir 'build-portable' -Jobs 2
 python -B tools/package_portable_release.py --build-dir build-portable
@@ -154,9 +154,11 @@ distribute derived code/artwork, or proof that every game route works.
 ## Private inputs and artifacts
 
 See [baserom.md](../baserom.md) for the original ROM and BIOS identities. English
-1.1.0f must match SHA-1 `99ca58319b050c238b1cb61cbc6db7b418b5472c`.
+1.1.1f must match SHA-1 `65885d763f77648ac733daac69de15bc1ccb0ea5`.
 Translation code generation uses its revision-specific override configuration;
 Japanese must use its own corpus. Translation save states are revision-bound.
+The 1.1.0f results above are historical; see [1.1.1f scope](TRANSLATION111.md)
+and the new candidate's own manifest/evidence before making compatibility claims.
 
 Place private build output in ignored `build-*` directories. Keep ROMs, BIOS,
 patches, saves, captures, and generated guest code out of source commits and

@@ -1,6 +1,6 @@
 # Swordcraft Story 3 — Portable Beta
 
-Windows x64. Japanese + optional English 1.1.0f candidate; publication review is still open.
+Windows x64. Japanese + optional English 1.1.1f test candidate; publication review is still open.
 
 This build includes the reorganized launcher and Esc menu. Please test it in a
 new folder and report your Windows version, selected language, graphics settings,
@@ -15,7 +15,7 @@ controller, and steps to reproduce any problem.
    original filenames; originals remain unchanged. Different files with the
    same name get a readable suffix such as `Game (2).gba`.
 4. **Japanese needs no translation patch.** For English, optionally select your
-   released **Hajimari_no_Ishi_v1.1.0.f.bps** in **Mods** and enable it. An already-translated
+   released **Hajimari_no_Ishi_v1.1.1.f.bps** in **Mods** and enable it. An already-translated
    ROM matching this build can also be selected directly.
 5. Press **Play**. Press **Esc** during play for the in-game menu.
 
@@ -58,9 +58,10 @@ in place. Save states and rewind are separate features.
 Home shows the selected game language; expand **Game files** for full paths and
 BIOS options. Japanese uses
 `Saves/japanese.eep` and `Save States/japanese.state1` through `.state10`.
-Released English uses `Saves/english-1.1.0f.eep` and
-`Save States/english-1.1.state1` through `.state10` (the current runtime's shorter
-slot filename). Keep the entire Save States folder backed up when changing
+Released English uses `Saves/english-1.1.1f.eep` and
+`Save States/english-1_1_1f.state1` through `.state10`. The underscores preserve
+the full revision in slot filenames, avoiding the older `english-1.1.state*`
+names. Keep the entire Save States folder backed up when changing
 translation revisions; a filename alone does not establish compatibility.
 Earlier released-English saves remain under their versioned names; save states
 are bound to their exact ROM and are not automatically converted on upgrade.
@@ -77,7 +78,7 @@ the original Japanese ROM with **Change ROM** in that case.
 
 This package no longer runs the retired English beta translation. The internal
 engine filename still contains `Beta` for starter compatibility; its English
-code and ROM verification are for release **1.1.0.f**.
+code and ROM verification are for release **1.1.1.f**.
 
 The Esc menu offers **Pause**, **Resume**, **Reset game** and **Quit game**.
 Choose whether opening the menu automatically pauses play. Reset/Close ask for
@@ -206,7 +207,7 @@ If frame rate suffers, choose Nearest or Sharp with screen effects Off.
 
 ## Compatibility
 
-This candidate uses separate Japanese/English 1.1.0f engines and readable imported
+This candidate uses separate Japanese/English 1.1.1f engines and readable imported
 filenames. The launcher selects the engine by
 verified ROM contents, not its filename; the translation is optional.
 It includes the themed launcher/Esc menu and experimental 12:5 presentation.
@@ -222,7 +223,7 @@ Required input SHA-1 identities:
 
 - Japanese ROM: `3f5253fcf57e07ce52472bd29a61d16b98a12376`
 - GBA BIOS: `300c20df6731a33952ded8c436f7f186d25d3492`
-- Translated output (1.1.0.f): `99ca58319b050c238b1cb61cbc6db7b418b5472c`
+- Translated output (1.1.1.f): `65885d763f77648ac733daac69de15bc1ccb0ea5`
 
 A newer translation may require a new executable. No compiler or self-healing
 cache is included; untested dynamic-code paths remain a limitation.

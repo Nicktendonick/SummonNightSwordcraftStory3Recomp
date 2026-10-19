@@ -16,6 +16,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = json.loads((ROOT / 'packaging/portable-beta/target.json').read_text())
+ENGLISH_SAVE = 'english-' + TARGET['english_revision'] + '.eep'
+ENGLISH_LABEL = 'English (translation ' + TARGET['english_revision'].removesuffix('f') + '.f)'
 PRESETS = ((0, 0, 35), (2, 0, 35), (3, 0, 35), (0, 1, 25), (1, 2, 35))
 
 
@@ -110,7 +112,7 @@ def main():
     for path in (args.package / 'Credits').iterdir():
         if path.is_file():
             shutil.copyfile(path, data / 'Credits' / path.name)
-    batteries = [data / 'Saves' / name for name in ('japanese.eep', 'english-1.1.0f.eep')]
+    batteries = [data / 'Saves' / name for name in ('japanese.eep', ENGLISH_SAVE)]
     for path in batteries:
         path.write_bytes(b'\xff' * 8192)
         protected[str(path)] = digest(path)
@@ -146,9 +148,9 @@ def main():
     try:
         for name, script, language, save, sibling in (
             ('japanese', f'patchclear;romfile:{args.japanese_rom};romprobe;play', 'Japanese (original)', 'japanese.eep', 'Swordcraft3Japanese.exe'),
-            ('english-patch', f'patchfile:{args.patch};romprobe;play', 'English (translation 1.1.0.f)', 'english-1.1.0f.eep', 'Swordcraft3CustomRendererBeta.exe'),
+            ('english-patch', f'patchfile:{args.patch};romprobe;play', ENGLISH_LABEL, ENGLISH_SAVE, 'Swordcraft3CustomRendererBeta.exe'),
             ('japanese-return', 'patchtoggle;romprobe;play', 'Japanese (original)', 'japanese.eep', 'Swordcraft3Japanese.exe'),
-            ('english-prepatched', f'patchclear;romfile:{args.english_rom};romprobe;play', 'English (translation 1.1.0.f)', 'english-1.1.0f.eep', 'Swordcraft3CustomRendererBeta.exe'),
+            ('english-prepatched', f'patchclear;romfile:{args.english_rom};romprobe;play', ENGLISH_LABEL, ENGLISH_SAVE, 'Swordcraft3CustomRendererBeta.exe'),
         ):
             log, stdout = run(name, script)
             assert 'verified=1 can_play=1' in log and 'language=' + language in log
