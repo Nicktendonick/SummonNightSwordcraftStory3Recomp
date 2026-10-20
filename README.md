@@ -24,7 +24,7 @@ translation patch, or personal save is supplied by this repository.
 
 ## Current source and release status
 
-The source supports original Japanese and verified **English 1.1.0f** builds.
+This branch prepares original Japanese and **English 1.1.1f** test builds.
 English revisions have separate generated instruction corpora and save paths;
 a future translation is not automatically compatible. See [input identities](baserom.md).
 
@@ -41,9 +41,10 @@ features; options and compatibility depend on the installed build.
 
 **Release-readiness work is in progress.** Merging source does not update an
 already-installed portable. The packaging recipe and player README now target
-**1.1.0f**. A fresh two-language build and local candidate checks have passed;
+**1.1.1f**. The earlier 1.1.0f candidate's results do not certify this update;
 [remaining acceptance gates](docs/RELEASE_TESTING.md) must be resolved before
-publishing. Do not relabel an old ZIP as a new build.
+publishing. See the [1.1.1f compatibility scope](docs/TRANSLATION111.md).
+Do not relabel an old ZIP as a new build.
 
 ## Build or contribute
 

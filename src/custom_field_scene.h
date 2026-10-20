@@ -175,6 +175,12 @@ public:
             // 080A4560 expiry-pointer relocation match reviewed 1.0.5.f.
             supported_rom_=supported_rom_ || hash=="99ca58319b050c238b1cb61cbc6db7b418b5472c";
 #endif
+#if defined(SWORDCRAFT3_RELEASE111_TRANSLATION)
+            // audit_translation111_inputs.py verifies the field producer and
+            // consumer spans; only the expiry-message data pointer moved.
+            // Ownership, source-map and animation checks remain mandatory.
+            supported_rom_=supported_rom_ || hash=="65885d763f77648ac733daac69de15bc1ccb0ea5";
+#endif
             sources_.reset(); animation_sources_.reset();
         }
         if(!supported_rom_) { decline_="field-rom-revision"; return false; }

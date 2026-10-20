@@ -12,7 +12,13 @@
 
 namespace swordcraft3 {
 inline constexpr const char* japanese_sha1 = "3f5253fcf57e07ce52472bd29a61d16b98a12376";
-#if defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
+#if defined(SWORDCRAFT3_RELEASE111_TRANSLATION)
+inline constexpr const char* english_sha1 = "65885d763f77648ac733daac69de15bc1ccb0ea5";
+inline constexpr const char* english_crc32 = "0x1001F351";
+inline constexpr std::uint32_t english_crc32_value = 0x1001F351u;
+inline constexpr const char* english_label = "English (translation 1.1.1.f)";
+inline constexpr const char* english_patch_name = "English 1.1.1.f BPS";
+#elif defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
 // English 1.1.0.f; its audited code spans match 1.0.5.f/1.0.6.f.
 inline constexpr const char* english_sha1 = "99ca58319b050c238b1cb61cbc6db7b418b5472c";
 inline constexpr const char* english_crc32 = "0x61E2CD29";
@@ -51,7 +57,11 @@ inline constexpr PortableLanguage japanese_language{
     "Saves/japanese.eep", "Save States/japanese"};
 inline constexpr PortableLanguage english_language{
     english_label, english_sha1, english_crc32, "Swordcraft3CustomRendererBeta.exe",
-#if defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
+#if defined(SWORDCRAFT3_RELEASE111_TRANSLATION)
+    // Runtime replaces the basename extension with .stateN. Underscores keep
+    // the full revision intact instead of colliding with english-1.1.stateN.
+    "Saves/english-1.1.1f.eep", "Save States/english-1_1_1f"};
+#elif defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
     "Saves/english-1.1.0f.eep", "Save States/english-1.1.0f"};
 #elif defined(SWORDCRAFT3_RELEASE106_TRANSLATION)
     "Saves/english-1.0.6f.eep", "Save States/english-1.0.6f"};

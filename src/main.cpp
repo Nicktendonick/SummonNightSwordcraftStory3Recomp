@@ -133,7 +133,9 @@ int main(int argc, char** argv) {
     opts.launcher_rom_cache_filename = "rom-beta.cfg";
     opts.launcher_rom_patch_note =
         "This executable is statically recompiled for the supplied English "
-#if defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
+#if defined(SWORDCRAFT3_RELEASE111_TRANSLATION)
+        "1.1.1.f BPS. Select that patch and the verified Japanese ROM.";
+#elif defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
         "1.1.0.f BPS. Select that patch and the verified Japanese ROM.";
 #elif defined(SWORDCRAFT3_RELEASE106_TRANSLATION)
         "1.0.6.f BPS. Select that patch and the verified Japanese ROM.";
@@ -173,7 +175,13 @@ int main(int argc, char** argv) {
             opts.launcher_unpatched_label = swordcraft3::japanese_language.label;
             opts.launcher_patched_label = swordcraft3::english_language.label;
             opts.launcher_rom_patch_note =
-#if defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
+#if defined(SWORDCRAFT3_RELEASE111_TRANSLATION)
+                "Japanese works without a patch. English uses translation 1.1.1.f. "
+                "Select its BPS patch and enable it here; disable it to return to Japanese. "
+                "Other English patch versions are not supported by this build. "
+                "English 1.1.1.f has separate save files; older saves remain untouched. "
+                "Save states from older revisions are not automatically converted.";
+#elif defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
                 "Japanese works without a patch. English uses translation 1.1.0.f. "
                 "Select its BPS patch and enable it here; disable it to return to Japanese. "
                 "Other English patch versions are not supported by this build. "

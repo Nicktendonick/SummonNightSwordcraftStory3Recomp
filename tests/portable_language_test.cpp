@@ -10,7 +10,16 @@ int main(int argc, char** argv) {
     CHECK(argument_value(args, "--save") == "chosen.eep");
     CHECK(std::string(japanese_language.save) != english_language.save);
     CHECK(std::string(japanese_language.states) != english_language.states);
-#if defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
+#if defined(SWORDCRAFT3_RELEASE111_TRANSLATION)
+    CHECK(std::string(english_sha1) == "65885d763f77648ac733daac69de15bc1ccb0ea5");
+    CHECK(english_crc32_value == 0x1001F351u);
+    CHECK(std::string(english_language.save) == "Saves/english-1.1.1f.eep");
+    CHECK(std::string(english_language.states) == "Save States/english-1_1_1f");
+    CHECK(std::filesystem::path(english_language.states).replace_extension(".state1") ==
+          std::filesystem::path("Save States/english-1_1_1f.state1"));
+    CHECK(std::filesystem::path(english_language.states).replace_extension(".state1") !=
+          std::filesystem::path("Save States/english-1.1.0f").replace_extension(".state1"));
+#elif defined(SWORDCRAFT3_RELEASE110_TRANSLATION)
     CHECK(std::string(english_language.save) == "Saves/english-1.1.0f.eep");
     CHECK(std::string(english_language.states) == "Save States/english-1.1.0f");
 #elif defined(SWORDCRAFT3_RELEASE106_TRANSLATION)

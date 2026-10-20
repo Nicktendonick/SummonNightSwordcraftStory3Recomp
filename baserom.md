@@ -15,6 +15,14 @@ Supply your own legally dumped Japanese cartridge image at
 The ROM is never committed or packaged. The runtime and launcher refuse an
 image that does not match the pinned SHA-1.
 
+## Optional English 1.1.1f test target
+
+Apply your supplied `Hajimari_no_Ishi_v1.1.1.f.bps` to the verified Japanese
+image, not to an already-translated or Guard-patched ROM. The separate 1.1.1f
+engine requires SHA-1 `65885d763f77648ac733daac69de15bc1ccb0ea5` and CRC32
+`1001F351`. Older English ROMs require their matching older executable.
+Japanese remains playable without the patch. See [compatibility scope](docs/TRANSLATION111.md).
+
 ## Required GBA BIOS
 
 Place a legally obtained standard Game Boy Advance BIOS at

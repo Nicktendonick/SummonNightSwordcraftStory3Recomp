@@ -10,6 +10,10 @@ import validate_portable_ui as ui
 
 
 class UiObservationTests(unittest.TestCase):
+    def test_current_language_expectations(self):
+        self.assertEqual(ui.ENGLISH_SAVE, 'english-1.1.1f.eep')
+        self.assertEqual(ui.ENGLISH_LABEL, 'English (translation 1.1.1.f)')
+
     def test_launcher_command_does_not_skip_preboot(self):
         command = ui.launcher_command(Path('synthetic package'))
         self.assertIn('--launcher', command)

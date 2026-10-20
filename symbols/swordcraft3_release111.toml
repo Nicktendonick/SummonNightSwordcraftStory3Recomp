@@ -1,0 +1,11 @@
+# Append to the Japanese base only for verified English 1.1.1.f.
+# audit_translation111_inputs.py checks that the script dispatch instructions
+# and table at 0801262C..08012700 are unchanged from reviewed English 1.1.0.f.
+# All other translated instructions are generated afresh from the new ROM.
+[[jump_table]]
+addr = 0x080126C0
+stride = 4
+count = 16
+format = "abs32"
+entries_mode = "thumb"
+name = "release111_script_binary_operators"
